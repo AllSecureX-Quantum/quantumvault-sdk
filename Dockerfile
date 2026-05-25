@@ -16,7 +16,7 @@
 # stay useful for debugging.
 
 # Rust 1.85+ required: transitive dep `base64ct` uses edition2024.
-ARG RUST_VERSION=1.85
+ARG RUST_VERSION=1.86
 ARG DEBIAN_VERSION=bookworm
 
 # -----------------------------------------------------------------------
