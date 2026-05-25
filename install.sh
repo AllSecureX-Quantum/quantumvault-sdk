@@ -144,9 +144,12 @@ if [ -z "$DEST" ]; then
     DEST=/usr/local/bin
   else
     DEST="$HOME/.local/bin"
-    mkdir -p "$DEST"
   fi
 fi
+# Always ensure the destination directory exists — BSD `install` and `cp`
+# on macOS both fail if the parent doesn't exist (GNU `install -D` does,
+# but we can't assume GNU coreutils).
+mkdir -p "$DEST" || { err "could not create install destination: $DEST"; exit 3; }
 log "install destination: $DEST"
 
 # ----- Download archive + checksum --------------------------------------
