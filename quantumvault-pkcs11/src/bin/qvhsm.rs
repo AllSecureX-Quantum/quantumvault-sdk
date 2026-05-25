@@ -112,7 +112,12 @@ fn cmd_wrap(args: &[&str]) -> Result<(), String> {
     let serialised = serde_json::to_string_pretty(&env).map_err(|e| e.to_string())?;
     atomic_write(Path::new(&out_path), serialised.as_bytes())?;
 
-    println!("✓ wrapped {} ({} bytes) -> {}", in_path, plaintext.len(), out_path);
+    println!(
+        "✓ wrapped {} ({} bytes) -> {}",
+        in_path,
+        plaintext.len(),
+        out_path
+    );
     println!("  kek label : {}", env.kek_label);
     println!("  aad       : {aad}");
     println!("  algorithm : {}", env.algorithm);
@@ -138,7 +143,12 @@ fn cmd_unwrap(args: &[&str]) -> Result<(), String> {
         .map_err(|e| format!("unwrap failed: {e}"))?;
     atomic_write_secret(Path::new(&out_path), &pt)?;
 
-    println!("✓ unwrapped {} -> {} ({} bytes)", in_path, out_path, pt.len());
+    println!(
+        "✓ unwrapped {} -> {} ({} bytes)",
+        in_path,
+        out_path,
+        pt.len()
+    );
     Ok(())
 }
 
@@ -154,11 +164,13 @@ fn cmd_inspect(args: &[&str]) -> Result<(), String> {
     let aad = B64
         .decode(&env.aad_b64)
         .map_err(|e| format!("aad decode: {e}"))?;
-    let aad_str = std::str::from_utf8(&aad).map(|s| s.to_string()).unwrap_or_else(|_| {
-        let mut s = String::from("(binary) ");
-        s.push_str(&hex(&aad));
-        s
-    });
+    let aad_str = std::str::from_utf8(&aad)
+        .map(|s| s.to_string())
+        .unwrap_or_else(|_| {
+            let mut s = String::from("(binary) ");
+            s.push_str(&hex(&aad));
+            s
+        });
 
     println!("envelope   : {in_path}");
     println!("  version  : {}", env.version);

@@ -162,7 +162,10 @@ fn inspect_prints_metadata_without_decryption() {
     assert!(out.status.success(), "inspect failed");
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("AES-256-GCM"), "{stdout}");
-    assert!(stdout.contains("scope-A"), "AAD should be visible: {stdout}");
+    assert!(
+        stdout.contains("scope-A"),
+        "AAD should be visible: {stdout}"
+    );
 }
 
 #[test]

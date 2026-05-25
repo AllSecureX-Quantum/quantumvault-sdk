@@ -108,15 +108,13 @@ fn run(cli: Cli) -> Result<ExitCode> {
     }
 }
 
-fn cmd_keygen(
-    out_dir: &std::path::Path,
-    hsm_kek: Option<&std::path::Path>,
-) -> Result<ExitCode> {
+fn cmd_keygen(out_dir: &std::path::Path, hsm_kek: Option<&std::path::Path>) -> Result<ExitCode> {
     std::fs::create_dir_all(out_dir).with_context(|| format!("create {out_dir:?}"))?;
     let (sk, vk) = generate_keypair().context("generate_keypair")?;
     let sk_path = out_dir.join("smime.signing.json");
     let vk_path = out_dir.join("smime.verifying.json");
-    sk.save_to_file(&sk_path, hsm_kek).context("save signing key")?;
+    sk.save_to_file(&sk_path, hsm_kek)
+        .context("save signing key")?;
     vk.save_to_file(&vk_path).context("save verifying key")?;
     println!("✓ wrote signing key   → {}", sk_path.display());
     println!("✓ wrote verifying key → {}", vk_path.display());

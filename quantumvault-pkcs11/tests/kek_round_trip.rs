@@ -82,7 +82,10 @@ fn unknown_version_rejected() {
     let mut env = kek.wrap(b"plaintext", b"aad").unwrap();
     env.version = 99;
     let err = kek.unwrap(&env, b"aad").unwrap_err();
-    assert!(matches!(err, HsmError::UnsupportedVersion(99)), "got {err:?}");
+    assert!(
+        matches!(err, HsmError::UnsupportedVersion(99)),
+        "got {err:?}"
+    );
 }
 
 #[test]
@@ -91,7 +94,10 @@ fn unknown_algorithm_rejected() {
     let mut env = kek.wrap(b"plaintext", b"aad").unwrap();
     env.algorithm = "XSalsa20".into();
     let err = kek.unwrap(&env, b"aad").unwrap_err();
-    assert!(matches!(err, HsmError::UnsupportedAlgorithm(_)), "got {err:?}");
+    assert!(
+        matches!(err, HsmError::UnsupportedAlgorithm(_)),
+        "got {err:?}"
+    );
 }
 
 #[test]

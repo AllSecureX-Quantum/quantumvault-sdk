@@ -116,8 +116,7 @@ fn unwrap_if_wrapped(s: &str, kek_path: Option<&Path>) -> Result<Option<Vec<u8>>
     }
     let kek_path = kek_path.ok_or_else(|| {
         CaError::Hsm(
-            "this signing key file is HSM-wrapped — pass --hsm-kek <dev-kek.json> to unwrap"
-                .into(),
+            "this signing key file is HSM-wrapped — pass --hsm-kek <dev-kek.json> to unwrap".into(),
         )
     })?;
     let kek = read_dev_kek_file(kek_path)?;

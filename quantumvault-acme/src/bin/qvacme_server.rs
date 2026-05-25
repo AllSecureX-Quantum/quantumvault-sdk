@@ -78,8 +78,8 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     let (sk_path, cert_path) = find_parent_files(&cli.parent)?;
-    let parent_signing_key = CaSigningKey::load_from_file(&sk_path, None)
-        .context("load parent signing key")?;
+    let parent_signing_key =
+        CaSigningKey::load_from_file(&sk_path, None).context("load parent signing key")?;
     let parent_cert = Certificate::load_from_file(&cert_path).context("load parent cert")?;
     if !parent_cert.tbs.is_ca {
         anyhow::bail!("parent cert is not a CA — qvacme-server requires a CA parent");

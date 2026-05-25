@@ -59,9 +59,9 @@ pub fn read_dev_kek_file(path: &Path) -> Result<InMemoryKek> {
 /// on Unix). Refuses to overwrite an existing file — the caller is
 /// expected to have already checked.
 pub fn write_dev_kek_file(path: &Path, kek: &InMemoryKek) -> Result<()> {
-    let parent = path.parent().ok_or_else(|| {
-        HsmError::Pkcs11(format!("{} has no parent dir", path.display()))
-    })?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| HsmError::Pkcs11(format!("{} has no parent dir", path.display())))?;
     fs::create_dir_all(parent)?;
 
     let file = DevKekFile {

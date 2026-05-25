@@ -48,8 +48,14 @@ fn hsm_wrapped_keygen_then_sign_verify() {
     // keys remain plaintext (they're the trust anchors).
     let ksk_sk = fs::read_to_string(keys.join("ksk.signing.json")).unwrap();
     let zsk_sk = fs::read_to_string(keys.join("zsk.signing.json")).unwrap();
-    assert!(ksk_sk.contains("AES-256-GCM"), "KSK should be wrapped: {ksk_sk}");
-    assert!(zsk_sk.contains("AES-256-GCM"), "ZSK should be wrapped: {zsk_sk}");
+    assert!(
+        ksk_sk.contains("AES-256-GCM"),
+        "KSK should be wrapped: {ksk_sk}"
+    );
+    assert!(
+        zsk_sk.contains("AES-256-GCM"),
+        "ZSK should be wrapped: {zsk_sk}"
+    );
     let ksk_vk = fs::read_to_string(keys.join("ksk.verifying.json")).unwrap();
     assert!(
         ksk_vk.contains("qvdnssec-key:v1"),
@@ -76,7 +82,11 @@ fn hsm_wrapped_keygen_then_sign_verify() {
         .arg(keys.join("ksk.verifying.json"))
         .output()
         .unwrap();
-    assert!(out.status.success(), "verify failed: {}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "verify failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     assert!(String::from_utf8_lossy(&out.stdout).contains("zone verified"));
 }
 
@@ -110,7 +120,10 @@ fn sign_zone_without_hsm_kek_errors_when_keys_wrapped() {
         .arg(&keys)
         .output()
         .unwrap();
-    assert!(!out.status.success(), "expected sign-zone to fail without --hsm-kek");
+    assert!(
+        !out.status.success(),
+        "expected sign-zone to fail without --hsm-kek"
+    );
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
         stderr.contains("HSM-wrapped") || stderr.contains("--hsm-kek"),

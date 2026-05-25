@@ -87,7 +87,13 @@ impl KekProvider for InMemoryKek {
         let mut nonce = [0u8; 12];
         rand::thread_rng().fill_bytes(&mut nonce);
         let ct = cipher
-            .encrypt(Nonce::from_slice(&nonce), Payload { msg: plaintext, aad })
+            .encrypt(
+                Nonce::from_slice(&nonce),
+                Payload {
+                    msg: plaintext,
+                    aad,
+                },
+            )
             .map_err(|_| HsmError::DecryptFailed)?;
         Ok(WrappedKey::from_raw(&self.label, aad, &nonce, &ct))
     }
@@ -186,7 +192,10 @@ mod pkcs11_impl {
             let kek_handle = find_aes_kek(&session, key_label)?;
             Ok(Self {
                 label: key_label.to_string(),
-                inner: Mutex::new(Inner { session, kek_handle }),
+                inner: Mutex::new(Inner {
+                    session,
+                    kek_handle,
+                }),
             })
         }
     }

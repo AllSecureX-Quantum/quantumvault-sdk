@@ -49,10 +49,14 @@ fn tools_list_finds_sibling_binaries() {
     let mut cmd = std::process::Command::new(&quantumvault);
     cmd.args(["--format", "json", "tools", "list"]);
     let out = cmd.output().expect("spawn quantumvault");
-    assert!(out.status.success(), "stderr: {}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let stdout = String::from_utf8_lossy(&out.stdout);
-    let parsed: serde_json::Value = serde_json::from_str(&stdout)
-        .unwrap_or_else(|e| panic!("not JSON: {e} :: {stdout}"));
+    let parsed: serde_json::Value =
+        serde_json::from_str(&stdout).unwrap_or_else(|e| panic!("not JSON: {e} :: {stdout}"));
 
     let entries = parsed["data"].as_array().expect("data array");
     assert_eq!(entries.len(), 8, "expected 8 tools, got {}", entries.len());
@@ -92,7 +96,10 @@ fn tools_ca_init_root_delegates_to_qvca() {
         String::from_utf8_lossy(&out.stdout),
         String::from_utf8_lossy(&out.stderr)
     );
-    assert!(root.join("root.cert.json").exists(), "root cert not created");
+    assert!(
+        root.join("root.cert.json").exists(),
+        "root cert not created"
+    );
 }
 
 /// `quantumvault tools hsm init-master ... && hsm wrap ... && hsm unwrap ...`

@@ -255,8 +255,7 @@ fn keys_save_load_roundtrip() {
     let vk_path = tmp.path().join("vk.json");
     sk.save_to_file(&sk_path, None).unwrap();
     vk.save_to_file(&vk_path).unwrap();
-    let _sk2 =
-        quantumvault_dnssec::DnssecSigningKey::load_from_file(&sk_path, None).unwrap();
+    let _sk2 = quantumvault_dnssec::DnssecSigningKey::load_from_file(&sk_path, None).unwrap();
     let vk2 = quantumvault_dnssec::DnssecVerifyingKey::load_from_file(&vk_path).unwrap();
     assert_eq!(vk2.fingerprint(), vk.fingerprint());
 }

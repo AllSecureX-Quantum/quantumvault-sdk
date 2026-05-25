@@ -42,7 +42,13 @@ fn end_to_end_hsm_wrapped_chain() {
     let st = Command::new(bin("qvca"))
         .args(["init-root", "--out"])
         .arg(&root)
-        .args(["--cn", "Smoke HSM Root", "--validity-years", "2", "--hsm-kek"])
+        .args([
+            "--cn",
+            "Smoke HSM Root",
+            "--validity-years",
+            "2",
+            "--hsm-kek",
+        ])
         .arg(&kek)
         .status()
         .expect("qvca init-root");
@@ -177,7 +183,13 @@ fn wrong_kek_rejects_with_clear_error() {
     assert!(Command::new(bin("qvca"))
         .args(["init-root", "--out"])
         .arg(&root)
-        .args(["--cn", "Wrong KEK Root", "--validity-years", "1", "--hsm-kek"])
+        .args([
+            "--cn",
+            "Wrong KEK Root",
+            "--validity-years",
+            "1",
+            "--hsm-kek"
+        ])
         .arg(&kek_a)
         .status()
         .unwrap()

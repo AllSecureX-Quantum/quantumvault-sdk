@@ -46,7 +46,10 @@ fn hsm_wrapped_keygen_then_sign_verify() {
         .success());
 
     let sk_blob = fs::read_to_string(keys.join("smime.signing.json")).unwrap();
-    assert!(sk_blob.contains("AES-256-GCM"), "signing key should be wrapped");
+    assert!(
+        sk_blob.contains("AES-256-GCM"),
+        "signing key should be wrapped"
+    );
     let vk_blob = fs::read_to_string(keys.join("smime.verifying.json")).unwrap();
     assert!(vk_blob.contains("qvsmime-key:v1"));
 
@@ -108,7 +111,10 @@ fn sign_without_hsm_kek_errors_when_key_wrapped() {
         .arg(&keys)
         .output()
         .unwrap();
-    assert!(!out.status.success(), "expected sign to fail without --hsm-kek");
+    assert!(
+        !out.status.success(),
+        "expected sign to fail without --hsm-kek"
+    );
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
         stderr.contains("HSM-wrapped") || stderr.contains("--hsm-kek"),

@@ -242,7 +242,10 @@ fn cmd_init_root(
     println!("  not_before  : {}", cert.tbs.not_before.to_rfc3339());
     println!("  not_after   : {}", cert.tbs.not_after.to_rfc3339());
     if hsm_kek.is_some() {
-        println!("  signing key : HSM-wrapped under KEK at {}", hsm_kek.unwrap().display());
+        println!(
+            "  signing key : HSM-wrapped under KEK at {}",
+            hsm_kek.unwrap().display()
+        );
     }
     println!("  files in    : {}", out_dir.display());
     Ok(ExitCode::SUCCESS)

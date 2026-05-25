@@ -89,9 +89,7 @@ fn main() -> ExitCode {
 fn run(cli: Cli) -> Result<ExitCode> {
     match cli.cmd {
         Command::Keygen { out, hsm_kek } => cmd_keygen(&out, hsm_kek.as_deref()),
-        Command::SignZone { zone, key, hsm_kek } => {
-            cmd_sign_zone(&zone, &key, hsm_kek.as_deref())
-        }
+        Command::SignZone { zone, key, hsm_kek } => cmd_sign_zone(&zone, &key, hsm_kek.as_deref()),
         Command::VerifyZone {
             zone,
             manifest,

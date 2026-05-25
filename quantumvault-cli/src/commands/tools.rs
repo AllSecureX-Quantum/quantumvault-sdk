@@ -199,6 +199,9 @@ mod tests {
     fn resolve_unknown_binary_errors() {
         let err = resolve_binary("definitely-not-a-real-binary-xyz").unwrap_err();
         let msg = err.to_string();
-        assert!(msg.contains("not found"), "expected not-found error, got: {msg}");
+        assert!(
+            msg.contains("not found"),
+            "expected not-found error, got: {msg}"
+        );
     }
 }

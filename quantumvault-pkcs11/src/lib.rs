@@ -55,7 +55,9 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum HsmError {
     /// The wrapped envelope's `version` field is not one this build understands.
-    #[error("unsupported wrapped-key envelope version: {0} (this build supports {ENVELOPE_VERSION})")]
+    #[error(
+        "unsupported wrapped-key envelope version: {0} (this build supports {ENVELOPE_VERSION})"
+    )]
     UnsupportedVersion(u32),
 
     /// The AEAD algorithm string in the envelope is not one this build supports.
