@@ -1,0 +1,227 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.0.0)'
+        required: true
+        type: string
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            binary_name: quantum-scanner-darwin-x64
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            binary_name: quantum-scanner-darwin-arm64
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            binary_name: quantum-scanner-linux-x64
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            binary_name: quantum-scanner-linux-arm64
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            binary_name: quantum-scanner-win-x64.exe
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-action@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross-compilation tools (Linux ARM64)
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Build binary
+        run: cargo build --release --target ${{ matrix.target }}
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+
+      - name: Rename binary (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          cp target/${{ matrix.target }}/release/quantum-scanner ${{ matrix.binary_name }}
+
+      - name: Rename binary (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cp target/${{ matrix.target }}/release/quantum-scanner.exe ${{ matrix.binary_name }}
+
+      - name: Generate checksum
+        shell: bash
+        run: |
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            certutil -hashfile ${{ matrix.binary_name }} SHA256 > ${{ matrix.binary_name }}.sha256
+          else
+            shasum -a 256 ${{ matrix.binary_name }} > ${{ matrix.binary_name }}.sha256
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.binary_name }}
+          path: |
+            ${{ matrix.binary_name }}
+            ${{ matrix.binary_name }}.sha256
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: binaries
+
+      - name: Display structure
+        run: ls -la binaries/*/
+
+      - name: Determine version
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Quantum Scanner v${{ steps.version.outputs.version }}
+          draft: false
+          prerelease: false
+          files: |
+            binaries/**/*
+          body: |
+            ## AllSecureX Quantum Scanner v${{ steps.version.outputs.version }}
+
+            ### Installation
+
+            ```bash
+            npm install -g @allsecurex-quantum/scanner
+            ```
+
+            Or download the binary for your platform below.
+
+            ### Platforms
+
+            | Platform | Binary |
+            |----------|--------|
+            | macOS (Intel) | quantum-scanner-darwin-x64 |
+            | macOS (Apple Silicon) | quantum-scanner-darwin-arm64 |
+            | Linux (x64) | quantum-scanner-linux-x64 |
+            | Linux (ARM64) | quantum-scanner-linux-arm64 |
+            | Windows (x64) | quantum-scanner-win-x64.exe |
+
+            ### Quick Start
+
+            ```bash
+            quantum-scanner auth login --key YOUR_API_KEY
+            quantum-scanner scan .
+            ```
+
+  upload-to-s3:
+    name: Upload to S3
+    needs: release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: binaries
+
+      - name: Determine version
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
+
+      - name: Upload to S3
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          for dir in binaries/*/; do
+            for file in "$dir"*; do
+              if [[ -f "$file" ]]; then
+                filename=$(basename "$file")
+                aws s3 cp "$file" "s3://scanner-releases-allsecurex/releases/v${VERSION}/${filename}" --acl public-read
+              fi
+            done
+          done
+
+          # Also update the 'latest' folder
+          for dir in binaries/*/; do
+            for file in "$dir"*; do
+              if [[ -f "$file" ]]; then
+                filename=$(basename "$file")
+                aws s3 cp "$file" "s3://scanner-releases-allsecurex/releases/latest/${filename}" --acl public-read
+              fi
+            done
+          done
+
+  publish-npm:
+    name: Publish to npm
+    needs: upload-to-s3
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout npm package
+        uses: actions/checkout@v4
+        with:
+          path: main
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Update version in package.json
+        run: |
+          cd main/quantum-scanner-npm
+          VERSION=${{ needs.release.outputs.version || github.event.inputs.version }}
+          npm version $VERSION --no-git-tag-version || true
+
+      - name: Publish to npm
+        run: |
+          cd main/quantum-scanner-npm
+          npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -1,0 +1,101 @@
+# Multi-arch Docker image publish to ghcr.io.
+#
+# Fires on the same `v*.*.*` tag pushes as release.yml so that a tag
+# produces both binary releases AND a Docker image in lockstep.
+# Manual `workflow_dispatch` is available for off-tag rebuilds.
+#
+# Image tags published:
+#   ghcr.io/<owner>/quantumvault:vX.Y.Z   (immutable, pinned)
+#   ghcr.io/<owner>/quantumvault:vX.Y     (rolling minor)
+#   ghcr.io/<owner>/quantumvault:vX       (rolling major)
+#   ghcr.io/<owner>/quantumvault:latest   (rolling, only on tag push)
+#
+# Architectures: linux/amd64 + linux/arm64 (manifest list) — covers
+# nearly every customer container host, with one image to consume.
+#
+# Cost model: this workflow runs ONLY on tag push (rare). The QEMU
+# emulation of arm64 inside an amd64 runner is slow (~25 minutes
+# typical for our build) but only one billable minute multiplier
+# (ubuntu-latest = 1x), so total cost per release stays under 30 min.
+
+name: docker-publish
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to (re)build (e.g. v1.0.0)'
+        required: true
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/quantumvault
+
+permissions:
+  contents: read
+  packages: write   # required to push to ghcr.io
+  id-token: write   # reserved for future Sigstore / cosign signing
+
+jobs:
+  build-and-push:
+    name: Build + push multi-arch image
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU (for cross-arch builds)
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Derive a clean set of tags from the git ref. On tag push:
+      # `:vX.Y.Z`, `:vX.Y`, `:vX`, and `:latest`. On dispatch the
+      # caller-supplied `tag` input is honoured.
+      - name: Compute image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=tag
+
+      - name: Build + push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Cache layers in the GH Actions cache so the next release
+          # build doesn't redo the full pqcrypto C compile.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          # Provenance + SBOM attestations are added automatically by
+          # buildx when push=true.
+          provenance: true
+          sbom: true
+
+      - name: Print image digest
+        run: |
+          echo "Published tags: ${{ steps.meta.outputs.tags }}"

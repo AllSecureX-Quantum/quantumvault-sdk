@@ -1,0 +1,61 @@
+[package]
+name = "quantumvault-keys"
+description = "Key management module for QuantumVault SDK"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[features]
+default = ["local-storage"]
+local-storage = []
+# aws-kms = ["aws-sdk-kms", "aws-config"]  # Disabled - requires Rust 1.88
+# aws-secrets = ["aws-sdk-secretsmanager", "aws-config"]  # Disabled - requires Rust 1.88
+aws-cloudhsm = []
+hashicorp-vault = ["reqwest"]
+all-storage = ["local-storage", "hashicorp-vault"]
+
+[dependencies]
+quantumvault-core = { path = "../quantumvault-core" }
+
+# Async
+tokio.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+
+# AWS SDK (optional) - disabled until Rust 1.88 available
+# aws-config = { workspace = true, optional = true }
+# aws-sdk-kms = { workspace = true, optional = true }
+# aws-sdk-secretsmanager = { workspace = true, optional = true }
+
+# HTTP client (for Vault)
+reqwest = { workspace = true, optional = true }
+
+# Serialization
+serde.workspace = true
+serde_json.workspace = true
+bincode.workspace = true
+base64.workspace = true
+
+# Security
+zeroize.workspace = true
+secrecy.workspace = true
+rand.workspace = true
+getrandom.workspace = true
+
+# Crypto for local storage encryption
+aes-gcm.workspace = true
+sha3.workspace = true
+hkdf.workspace = true
+
+# Utilities
+chrono.workspace = true
+uuid.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+parking_lot.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util", "macros"] }
+tempfile = "3.10"

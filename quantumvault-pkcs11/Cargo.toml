@@ -1,0 +1,48 @@
+[package]
+name = "quantumvault-pkcs11"
+description = "PKCS#11 HSM bridge — wraps PQC private-key material under HSM-held AES KEKs."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "qvhsm"
+path = "src/bin/qvhsm.rs"
+
+[features]
+# `pkcs11` pulls in the cryptoki crate + dynamic loader. Off by default
+# so the standard `cargo build --workspace` doesn't require a PKCS#11
+# system library to be present.
+default = []
+pkcs11 = ["dep:cryptoki"]
+
+[dependencies]
+# AEAD for the wrapped-envelope path. We use AES-256-GCM specifically
+# because every PKCS#11 v2.40+ HSM implements CKM_AES_GCM — so the
+# software KEK and the HSM-backed KEK speak the same wire format.
+aes-gcm = { workspace = true }
+
+# Serde / base64 for the on-disk envelope.
+serde.workspace = true
+serde_json.workspace = true
+base64.workspace = true
+
+# Errors + zeroize for key material.
+thiserror.workspace = true
+zeroize.workspace = true
+
+# Randomness for nonces.
+rand.workspace = true
+rand_core.workspace = true
+getrandom.workspace = true
+
+# PKCS#11 binding (feature-gated). cryptoki 0.7 covers v3.0 + most of
+# v3.1; v3.1's ML-DSA mechanisms aren't yet shipped by HSMs so we lean
+# on the universal AES-GCM mechanism for the KEK.
+cryptoki = { version = "0.7", optional = true }
+
+[dev-dependencies]
+hex.workspace = true
+tempfile = "3.10"

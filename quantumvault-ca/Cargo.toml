@@ -1,0 +1,47 @@
+[package]
+name = "quantumvault-ca"
+description = "Internal post-quantum Certificate Authority — ML-DSA-signed certificates and chain verification"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+quantumvault-core = { path = "../quantumvault-core" }
+quantumvault-pkcs11 = { path = "../quantumvault-pkcs11" }
+
+# Hashing (for cert fingerprints)
+sha3.workspace = true
+
+# Base64 for key + signature material on disk
+base64.workspace = true
+
+# Time
+chrono.workspace = true
+
+# Serde + JSON
+serde.workspace = true
+serde_json.workspace = true
+
+# Random for serial numbers
+rand.workspace = true
+
+# Errors
+thiserror.workspace = true
+
+# CLI + logging
+clap.workspace = true
+anyhow.workspace = true
+
+# UUID for key ids (re-used for cert ids)
+uuid = { version = "1", features = ["v4", "serde"] }
+
+[dev-dependencies]
+tempfile = "3.10"
+assert_cmd = "2.0"
+predicates = "3.1"
+
+[[bin]]
+name = "qvca"
+path = "src/bin/qvca.rs"

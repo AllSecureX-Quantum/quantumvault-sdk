@@ -1,0 +1,44 @@
+[package]
+name = "quantumvault-smime"
+description = "S/MIME-style PQC email signing — ML-DSA-65 detached signatures over RFC 5322 messages"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+quantumvault-core = { path = "../quantumvault-core" }
+quantumvault-pkcs11 = { path = "../quantumvault-pkcs11" }
+
+# Hashing
+sha3.workspace = true
+
+# Base64 (standard, with padding — same as the rest of the SDK)
+base64.workspace = true
+
+# Time
+chrono.workspace = true
+
+# Serde + JSON
+serde.workspace = true
+serde_json.workspace = true
+
+# Random for MIME boundaries
+rand.workspace = true
+
+# Errors
+thiserror.workspace = true
+
+# CLI
+clap.workspace = true
+anyhow.workspace = true
+
+[dev-dependencies]
+tempfile = "3.10"
+assert_cmd = "2.0"
+predicates = "3.1"
+
+[[bin]]
+name = "qvsmime"
+path = "src/bin/qvsmime.rs"

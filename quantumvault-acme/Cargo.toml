@@ -1,0 +1,48 @@
+[package]
+name = "quantumvault-acme"
+description = "PQC-ACME — automated certificate provisioning with ML-DSA-signed requests, issued by quantumvault-ca"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+quantumvault-core = { path = "../quantumvault-core" }
+quantumvault-ca = { path = "../quantumvault-ca" }
+quantumvault-jose = { path = "../quantumvault-jose" }
+
+axum = { workspace = true }
+tower = { workspace = true }
+tokio = { workspace = true }
+reqwest = { workspace = true }
+hyper = { workspace = true }
+
+serde = { workspace = true }
+serde_json = { workspace = true }
+base64 = { workspace = true }
+chrono = { workspace = true }
+sha3 = { workspace = true }
+
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+clap = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+uuid = { version = "1", features = ["v4", "serde"] }
+async-trait = { workspace = true }
+# Embedded SQLite — bundled so we don't depend on system libsqlite.
+rusqlite = { version = "0.31", features = ["bundled"] }
+
+[dev-dependencies]
+tempfile = "3.10"
+assert_cmd = "2.0"
+predicates = "3.1"
+
+[[bin]]
+name = "qvacme-server"
+path = "src/bin/qvacme_server.rs"
+
+[[bin]]
+name = "qvacme-client"
+path = "src/bin/qvacme_client.rs"

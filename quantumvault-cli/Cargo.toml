@@ -1,0 +1,58 @@
+[package]
+name = "quantumvault-cli"
+description = "Command-line interface for QuantumVault SDK"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "quantumvault"
+path = "src/main.rs"
+
+[features]
+default = ["local-storage"]
+local-storage = ["quantumvault-keys/local-storage"]
+# aws = ["quantumvault-keys/aws-kms", "quantumvault-keys/aws-secrets"]  # Disabled - requires Rust 1.88
+
+[dependencies]
+quantumvault-core = { path = "../quantumvault-core" }
+quantumvault-keys = { path = "../quantumvault-keys" }
+
+# CLI
+clap.workspace = true
+dialoguer.workspace = true
+indicatif.workspace = true
+console.workspace = true
+colored.workspace = true
+
+# Async
+tokio.workspace = true
+
+# Serialization
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml.workspace = true
+base64.workspace = true
+
+# Utilities
+chrono.workspace = true
+uuid.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+# Config
+dirs = "5.0"
+toml = "0.8"
+
+# Migration scanning
+walkdir = "2.5"
+regex = "1.10"
+
+[dev-dependencies]
+assert_cmd = "2.0"
+predicates = "3.1"
+tempfile.workspace = true

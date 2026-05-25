@@ -1,0 +1,271 @@
+# Release pipeline. Triggered on v*.*.* tag pushes (or workflow_dispatch
+# for ad-hoc testing). Builds every customer-facing PQC binary across the
+# supported targets, generates SHA-256 checksums, and publishes a GitHub
+# Release with the archives + a combined CHECKSUMS.txt.
+#
+# Targets shipped today:
+#   - linux-x86_64  (ubuntu-latest, native)
+#   - macos-arm64   (macos-14, native Apple Silicon)
+#   - windows-x86_64 (windows-latest, native)
+#
+# Linux arm64 and macOS x86_64 are deferred — most security engineers are
+# on Apple Silicon or Intel Linux, and arm64-Linux can be added later with
+# `cross` once we have first-customer demand.
+#
+# Cost model: only fires on tag push (rare event), so the macOS (10x) and
+# Windows (2x) GitHub-billing multipliers don't pressure the monthly budget.
+
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g. v1.0.0)'
+        required: true
+        type: string
+
+env:
+  CARGO_TERM_COLOR: always
+  # Every binary listed here gets cross-compiled and bundled into the
+  # release archive for each target. New tool binaries must be added
+  # here AND to the install.sh detection list.
+  PQC_BINS: >-
+    quantumvault
+    quantum-scanner
+    qvarchive
+    qvsmime
+    qvjwtproxy
+    qvca
+    qvdnssec
+    qvacme-server
+    qvacme-client
+    qvhsm
+
+permissions:
+  contents: write    # required to create GitHub Releases
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            archive_format: tar.gz
+            binary_suffix: ''
+          - os: macos-14
+            target: aarch64-apple-darwin
+            archive_format: tar.gz
+            binary_suffix: ''
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive_format: zip
+            binary_suffix: '.exe'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable with target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-${{ matrix.target }}
+
+      # Each crate is built explicitly via -p so only customer-facing
+      # binaries are bundled into the release archive.
+      - name: Build PQC tool binaries (release profile)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --release --target ${{ matrix.target }} \
+            -p quantumvault-cli \
+            -p quantum-scanner \
+            -p quantumvault-archive \
+            -p quantumvault-smime \
+            -p quantumvault-jwtproxy \
+            -p quantumvault-ca \
+            -p quantumvault-dnssec \
+            -p quantumvault-acme \
+            -p quantumvault-pkcs11
+
+      - name: Stage release artefacts (Linux/macOS)
+        if: matrix.os != 'windows-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          STAGE=quantumvault-${GITHUB_REF_NAME}-${{ matrix.target }}
+          mkdir -p "dist/${STAGE}"
+          for bin in ${PQC_BINS}; do
+            cp "target/${{ matrix.target }}/release/${bin}" "dist/${STAGE}/"
+          done
+          cp LICENSE README.md "dist/${STAGE}/" 2>/dev/null || true
+          cd dist
+          tar -czf "../${STAGE}.tar.gz" "${STAGE}"
+          cd ..
+          # Per-archive SHA-256.
+          shasum -a 256 "${STAGE}.tar.gz" > "${STAGE}.tar.gz.sha256"
+
+      - name: Stage release artefacts (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $STAGE = "quantumvault-$env:GITHUB_REF_NAME-${{ matrix.target }}"
+          New-Item -ItemType Directory -Force -Path "dist/$STAGE" | Out-Null
+          # PQC_BINS is a YAML folded scalar -> single space-separated string.
+          $bins = "${{ env.PQC_BINS }}".Split(' ',
+            [StringSplitOptions]::RemoveEmptyEntries)
+          foreach ($b in $bins) {
+            Copy-Item "target/${{ matrix.target }}/release/$b.exe" "dist/$STAGE/"
+          }
+          if (Test-Path LICENSE) { Copy-Item LICENSE "dist/$STAGE/" }
+          if (Test-Path README.md) { Copy-Item README.md "dist/$STAGE/" }
+          Compress-Archive -Path "dist/$STAGE/*" -DestinationPath "$STAGE.zip"
+          # Per-archive SHA-256.
+          $hash = Get-FileHash "$STAGE.zip" -Algorithm SHA256
+          "$($hash.Hash.ToLower())  $STAGE.zip" | Out-File -Encoding ascii "$STAGE.zip.sha256"
+
+      - name: Upload artefacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: quantumvault-${{ matrix.target }}
+          path: |
+            quantumvault-*.tar.gz
+            quantumvault-*.tar.gz.sha256
+            quantumvault-*.zip
+            quantumvault-*.zip.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artefacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artefacts
+          merge-multiple: true
+
+      # Aggregate CHECKSUMS.txt — single file every customer can fetch +
+      # verify against the per-archive .sha256 sidecars. Keeps the install
+      # script simple: download CHECKSUMS.txt, grep for the platform line.
+      - name: Build aggregate CHECKSUMS.txt
+        run: |
+          set -euo pipefail
+          cd artefacts
+          ls -la
+          # Concatenate all per-archive sha256 lines into one file.
+          : > CHECKSUMS.txt
+          for f in *.sha256; do
+            cat "$f" >> CHECKSUMS.txt
+          done
+          echo "----- CHECKSUMS.txt -----"
+          cat CHECKSUMS.txt
+
+      # Render the Homebrew formula by filling in the version + per-arch
+      # SHA-256 placeholders. The output `quantumvault.rb` is uploaded as
+      # a release asset; copy it into the homebrew-tap repo's Formula/
+      # directory to update the tap. (Auto-push to the tap repo will be
+      # added later — requires a fine-scoped PAT in repo secrets.)
+      - name: Render Homebrew formula
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          VERSION_NO_V="${TAG#v}"
+
+          # Pull SHA-256 values out of the per-archive sidecars.
+          MACOS_ARM64_ARCHIVE="quantumvault-${TAG}-aarch64-apple-darwin.tar.gz"
+          LINUX_X86_64_ARCHIVE="quantumvault-${TAG}-x86_64-unknown-linux-gnu.tar.gz"
+          MACOS_ARM64_SHA="$(awk '{print $1}' "artefacts/${MACOS_ARM64_ARCHIVE}.sha256")"
+          LINUX_X86_64_SHA="$(awk '{print $1}' "artefacts/${LINUX_X86_64_ARCHIVE}.sha256")"
+
+          if [ -z "$MACOS_ARM64_SHA" ] || [ -z "$LINUX_X86_64_SHA" ]; then
+            echo "missing checksum for at least one target" >&2
+            exit 1
+          fi
+
+          sed \
+            -e "s|__VERSION__|${VERSION_NO_V}|g" \
+            -e "s|__VERSION_WITH_V__|${TAG}|g" \
+            -e "s|__SHA256_MACOS_ARM64__|${MACOS_ARM64_SHA}|g" \
+            -e "s|__SHA256_LINUX_X86_64__|${LINUX_X86_64_SHA}|g" \
+            homebrew/quantumvault.rb.tmpl > artefacts/quantumvault.rb
+
+          echo "----- rendered Formula/quantumvault.rb -----"
+          cat artefacts/quantumvault.rb
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artefacts/*.tar.gz
+            artefacts/*.zip
+            artefacts/*.sha256
+            artefacts/CHECKSUMS.txt
+            artefacts/quantumvault.rb
+            install.sh
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+          body: |
+            ## QuantumVault SDK ${{ github.ref_name }}
+
+            Post-quantum cryptography binaries for production deployment.
+
+            ### Install (Linux / macOS)
+
+            One-line install:
+
+            ```bash
+            curl -fsSL https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/install.sh | sh
+            ```
+
+            ### Manual install
+
+            1. Download the archive for your platform (`*.tar.gz` or `*.zip`).
+            2. Verify against `CHECKSUMS.txt`:
+               ```bash
+               shasum -a 256 -c CHECKSUMS.txt
+               ```
+            3. Extract and move binaries to `/usr/local/bin` (or anywhere on `PATH`).
+
+            ### Homebrew (macOS / linuxbrew)
+
+            Once the `allsecurex-quantum/tap` repo carries the rendered formula:
+
+            ```bash
+            brew tap allsecurex-quantum/tap
+            brew install quantumvault
+            ```
+
+            The release asset `quantumvault.rb` is the rendered formula
+            for this version (drop it into `Formula/quantumvault.rb` in
+            the tap repo).
+
+            ### Bundled binaries
+
+            Every archive contains the full toolkit:
+
+            - `quantumvault` — unified CLI (wraps the seven PQC tools)
+            - `qvca` — internal PQC Certificate Authority
+            - `qvdnssec` — PQC DNSSEC zone signing
+            - `qvsmime` — S/MIME-style email signing
+            - `qvarchive` — long-term archival sealer (SLH-DSA)
+            - `qvjwtproxy` — PQC JWT verifier sidecar
+            - `qvacme-server` / `qvacme-client` — ACME-PQC issuance
+            - `qvhsm` — PKCS#11 HSM bridge
+            - `quantum-scanner` — codebase quantum-vulnerability scanner

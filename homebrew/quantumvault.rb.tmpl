@@ -1,0 +1,70 @@
+# Homebrew formula template for QuantumVault SDK.
+#
+# This file lives in the SDK repo as the source of truth. On every
+# release the publish job in .github/workflows/release.yml does:
+#
+#   1. Substitute the version + per-arch SHA-256 placeholders with the
+#      real values from the released tarballs.
+#   2. Upload the rendered formula as a release asset (`quantumvault.rb`).
+#   3. (Manual today; will automate later) Copy the rendered file into
+#      the `homebrew-tap` repo at `Formula/quantumvault.rb`, commit, push.
+#
+# After tap setup, macOS users install with:
+#
+#   brew tap allsecurex-quantum/tap
+#   brew install quantumvault
+#
+# Both Intel and Apple Silicon Macs are covered. Linux x86_64 is also
+# supported by Homebrew on Linux (linuxbrew).
+#
+# Formula style follows the Homebrew best-practice for binary releases
+# (the `binary` audit-style — no Ruby `def install` build steps, just
+# a `bin.install` of pre-built artefacts from GitHub Releases).
+
+class Quantumvault < Formula
+  desc "Post-quantum cryptography toolkit: CA, DNSSEC, S/MIME, archival, ACME, JWT, HSM bridge"
+  homepage "https://quantumvault.allsecurex.com"
+  version "__VERSION__"
+  license "Apache-2.0"
+
+  on_macos do
+    on_arm do
+      url "https://github.com/AllSecureX-Quantum/quantumvault-sdk/releases/download/__VERSION_WITH_V__/quantumvault-__VERSION_WITH_V__-aarch64-apple-darwin.tar.gz"
+      sha256 "__SHA256_MACOS_ARM64__"
+    end
+  end
+
+  on_linux do
+    on_intel do
+      url "https://github.com/AllSecureX-Quantum/quantumvault-sdk/releases/download/__VERSION_WITH_V__/quantumvault-__VERSION_WITH_V__-x86_64-unknown-linux-gnu.tar.gz"
+      sha256 "__SHA256_LINUX_X86_64__"
+    end
+  end
+
+  def install
+    # The release tarball expands into a directory named
+    # quantumvault-vX.Y.Z-<target>/. Move every binary onto $PATH.
+    bin.install Dir["quantumvault*/quantumvault"].first
+    bin.install Dir["quantumvault*/qvca"].first
+    bin.install Dir["quantumvault*/qvdnssec"].first
+    bin.install Dir["quantumvault*/qvsmime"].first
+    bin.install Dir["quantumvault*/qvarchive"].first
+    bin.install Dir["quantumvault*/qvjwtproxy"].first
+    bin.install Dir["quantumvault*/qvacme-server"].first
+    bin.install Dir["quantumvault*/qvacme-client"].first
+    bin.install Dir["quantumvault*/qvhsm"].first
+    bin.install Dir["quantumvault*/quantum-scanner"].first
+  end
+
+  test do
+    # Smoke: list bundled tools through the unified CLI. This proves
+    # both the CLI was extracted and that it can locate its siblings
+    # in the same Cellar bin/ directory.
+    assert_match "bundled tools", shell_output("#{bin}/quantumvault tools list --format json")
+
+    # Each of the wrapped binaries should respond to its own help flag.
+    %w[qvca qvdnssec qvsmime qvarchive qvjwtproxy qvacme-server qvacme-client qvhsm].each do |b|
+      system "#{bin}/#{b}", "--help"
+    end
+  end
+end

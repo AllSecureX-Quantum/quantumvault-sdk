@@ -1,0 +1,46 @@
+# CI: Lint, format, and security audit the Rust workspace.
+#
+# Budget posture (GitHub Free plan):
+#   - Only `fmt` runs on push/PR — cheap (~1 min) and strict.
+#   - clippy + audit run on workflow_dispatch only. Promoting to push
+#     trigger costs ~13 min per push and they're reporting-only today.
+#     Run them manually before a release or weekly via extended-ci.yml.
+#   - paths-ignore + concurrency cancellation match test.yml.
+
+name: lint
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - '.gitignore'
+      - 'LICENSE'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - '.gitignore'
+      - 'LICENSE'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fmt:
+    name: cargo fmt (strict)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all -- --check

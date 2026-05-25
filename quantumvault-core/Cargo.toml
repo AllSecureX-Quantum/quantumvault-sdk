@@ -1,0 +1,90 @@
+[package]
+name = "quantumvault-core"
+description = "Core post-quantum cryptography library for QuantumVault SDK"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[features]
+default = ["ml-kem", "ml-dsa", "slh-dsa", "aes", "sha3"]
+ml-kem = []
+ml-dsa = []
+slh-dsa = []
+xmss = []
+lms = []
+aes = []
+chacha = []
+sha3 = []
+hybrid = ["ml-kem", "ml-dsa"]
+fips = []
+all-algorithms = ["ml-kem", "ml-dsa", "slh-dsa", "xmss", "lms", "aes", "chacha", "sha3", "hybrid"]
+
+[dependencies]
+# PQC Dependencies
+pqcrypto.workspace = true
+pqcrypto-traits.workspace = true
+pqcrypto-kyber.workspace = true
+pqcrypto-dilithium.workspace = true
+pqcrypto-sphincsplus.workspace = true
+
+# Classical Crypto
+aes-gcm.workspace = true
+chacha20poly1305.workspace = true
+sha2.workspace = true
+sha3.workspace = true
+hkdf.workspace = true
+hmac.workspace = true
+rsa.workspace = true
+ecdsa.workspace = true
+p256.workspace = true
+
+# Security
+rand.workspace = true
+rand_core.workspace = true
+getrandom.workspace = true
+zeroize.workspace = true
+secrecy.workspace = true
+
+# Serialization
+serde.workspace = true
+serde_json.workspace = true
+base64.workspace = true
+hex.workspace = true
+bincode.workspace = true
+
+# Async
+tokio.workspace = true
+async-trait.workspace = true
+
+# Observability
+tracing.workspace = true
+metrics.workspace = true
+parking_lot.workspace = true
+
+# HTTP (for telemetry export)
+reqwest.workspace = true
+
+# Additional serialization
+serde_yaml.workspace = true
+
+# Error Handling
+thiserror.workspace = true
+
+# Utilities
+chrono.workspace = true
+uuid.workspace = true
+bytes.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true
+proptest.workspace = true
+test-case.workspace = true
+tokio = { workspace = true, features = ["test-util"] }
+
+[[bench]]
+name = "crypto_benchmarks"
+harness = false
