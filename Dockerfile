@@ -109,5 +109,9 @@ LABEL org.opencontainers.image.vendor="AllSecureX"
 
 # Default to the unified CLI's help screen. Override with a specific
 # tool: `docker run … quantumvault tools ca init-root …`.
-ENTRYPOINT ["quantumvault"]
-CMD ["--help"]
+# No ENTRYPOINT, so each bundled binary can be invoked directly:
+#   docker run --rm IMAGE quantumvault tools list
+#   docker run --rm IMAGE qvca init-root --out /work/root
+#   docker run --rm IMAGE quantum-scanner --help
+# A default CMD shows the unified CLI's help if the user runs the image bare.
+CMD ["quantumvault", "--help"]
