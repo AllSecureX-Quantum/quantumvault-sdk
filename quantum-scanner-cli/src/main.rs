@@ -3,7 +3,7 @@
 //! A production-ready CLI tool for scanning codebases for quantum-vulnerable
 //! cryptographic implementations. Compiled binary keeps detection algorithms private.
 //!
-//! Copyright (c) 2025 AllSecureX. All rights reserved.
+//! Copyright (c) 2025-2026 AllSecureX. All rights reserved.
 
 mod api;
 mod auth;
@@ -196,7 +196,7 @@ fn print_footer() {
         "https://allsecurex.com/api-docs".blue()
     );
     println!();
-    println!("    {}", "© 2025 AllSecureX. All rights reserved.".dimmed());
+    println!("    {}", format!("© {} AllSecureX. All rights reserved.", chrono::Utc::now().format("%Y")).dimmed());
     println!();
 }
 

@@ -3,7 +3,7 @@
 //! Contains patterns for detecting quantum-vulnerable cryptography.
 //! This code is compiled into the binary - source is not visible to users.
 //!
-//! Copyright (c) 2025 AllSecureX. All rights reserved. PROPRIETARY.
+//! Copyright (c) 2025-2026 AllSecureX. All rights reserved. PROPRIETARY.
 
 use once_cell::sync::Lazy;
 use regex::Regex;
