@@ -1,6 +1,6 @@
 [package]
 name = "quantum-scanner"
-version = "1.1.4"
+version = "1.2.0"
 edition = "2021"
 authors = ["AllSecureX <engineering@allsecurex.com>"]
 description = "Quantum Scanner CLI - Post-quantum cryptography vulnerability assessment tool"

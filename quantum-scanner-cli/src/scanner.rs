@@ -6,7 +6,7 @@
 use crate::api;
 use crate::auth;
 use crate::config::Config;
-use crate::patterns::{self, Finding, Severity};
+use crate::patterns::{self, Finding, QuantumRisk, Severity};
 use anyhow::Result;
 use colored::Colorize;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -41,9 +41,16 @@ pub struct ScanSummary {
     pub medium_count: usize,
     pub low_count: usize,
     pub info_count: usize,
+    /// Count of vulnerable (non-quantum-safe) findings - what risk score is calculated from
+    pub vulnerable_count: usize,
+    /// Count of quantum-safe / modern primitives detected (Info, QuantumSafe)
+    pub quantum_safe_count: usize,
     pub estimated_hours: f32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub libraries_detected: Option<Vec<String>>,
+    /// Distinct quantum-safe algorithms detected (e.g. ["ML-KEM", "AES-256", "SHA-256"])
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub quantum_safe_algorithms: Option<Vec<String>>,
 }
 
 /// Scan coverage and blind spots — "Known Unknowns"
@@ -539,6 +546,9 @@ fn calculate_summary(findings: &[Finding]) -> ScanSummary {
     let mut medium_count = 0;
     let mut low_count = 0;
     let mut info_count = 0;
+    let mut quantum_safe_count = 0;
+    let mut vulnerable_count = 0;
+    let mut safe_algos: std::collections::HashSet<String> = std::collections::HashSet::new();
 
     for finding in findings {
         *by_severity
@@ -558,11 +568,19 @@ fn calculate_summary(findings: &[Finding]) -> ScanSummary {
             Severity::Low => low_count += 1,
             Severity::Info => info_count += 1,
         }
+
+        if finding.quantum_risk == QuantumRisk::QuantumSafe {
+            quantum_safe_count += 1;
+            safe_algos.insert(finding.algorithm.clone());
+        } else {
+            vulnerable_count += 1;
+        }
     }
 
-    // Estimate migration hours
+    // Estimate migration hours, but only for vulnerable findings - safe findings are 0
     let estimated_hours = findings
         .iter()
+        .filter(|f| f.quantum_risk != QuantumRisk::QuantumSafe)
         .map(|f| match f.migration_effort.as_str() {
             "trivial" => 0.5,
             "easy" => 2.0,
@@ -572,6 +590,14 @@ fn calculate_summary(findings: &[Finding]) -> ScanSummary {
             _ => 4.0,
         })
         .sum();
+
+    let quantum_safe_algorithms = if safe_algos.is_empty() {
+        None
+    } else {
+        let mut v: Vec<String> = safe_algos.into_iter().collect();
+        v.sort();
+        Some(v)
+    };
 
     ScanSummary {
         by_severity,
@@ -583,8 +609,11 @@ fn calculate_summary(findings: &[Finding]) -> ScanSummary {
         medium_count,
         low_count,
         info_count,
+        vulnerable_count,
+        quantum_safe_count,
         estimated_hours,
         libraries_detected: None,
+        quantum_safe_algorithms,
     }
 }
 
@@ -678,7 +707,16 @@ fn print_results(
         "⚪".to_string(),
         summary.info_count
     );
+    println!(
+        "  │  {} QUANTUM-SAFE{:>4}    Already PQC / modern               │",
+        "✅".to_string(),
+        summary.quantum_safe_count
+    );
     println!("  │                                                           │");
+    println!(
+        "  │  Vulnerable:    {:>6}    (drives risk score)              │",
+        summary.vulnerable_count
+    );
     println!(
         "  │  Files Scanned: {:>6}                                     │",
         files_scanned
@@ -692,6 +730,23 @@ fn print_results(
         summary.estimated_hours
     );
     println!("  └───────────────────────────────────────────────────────────┘");
+
+    // Quantum-safe primitives panel (positive signal)
+    if let Some(ref safe_algos) = summary.quantum_safe_algorithms {
+        if !safe_algos.is_empty() {
+            println!();
+            println!("  {} Quantum-safe primitives detected:", "✓".green());
+            for algo in safe_algos.iter().take(8) {
+                println!("    {} {}", "✓".green(), algo.green());
+            }
+            if safe_algos.len() > 8 {
+                println!(
+                    "    {}",
+                    format!("... and {} more", safe_algos.len() - 8).dimmed()
+                );
+            }
+        }
+    }
 
     // Top findings
     if !findings.is_empty() {
