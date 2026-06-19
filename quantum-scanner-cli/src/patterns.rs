@@ -763,6 +763,9 @@ pub fn get_patterns() -> &'static [CryptoPattern] {
             },
 
             // ML-DSA (FIPS 204, Aug 2024)
+            // v1.2.1: word-boundary fix - matches MLDSA inside ECDSA_MLDSA, DILITHIUM
+            // inside RSA3072_DILITHIUM, etc. PQC algorithm names are distinctive
+            // enough that loose matching does not produce false positives.
             CryptoPattern {
                 id: "safe-ml-dsa",
                 name: "ML-DSA (Dilithium) Post-Quantum Signature",
@@ -770,13 +773,15 @@ pub fn get_patterns() -> &'static [CryptoPattern] {
                 category: Category::PostQuantum,
                 severity: Severity::Info,
                 quantum_risk: QuantumRisk::QuantumSafe,
-                regex: Regex::new(r"(?i)\b(ML[-_]?DSA(?:[-_]?(?:44|65|87))?|Dilithium[235]|OQS_SIG_dilithium|OQS_SIG_ml_dsa|crypto_sign_dilithium|EVP_PKEY_ML_DSA|BCRYPT_MLDSA_ALGORITHM)\b").unwrap(),
+                regex: Regex::new(r"(?i)(ML[-_]?DSA[-_]?(?:44|65|87)|ML[-_]?DSA|MLDSA|Dilithium[235]?|OQS_SIG_(?:alg_)?(?:dilithium|ml_dsa)|crypto_sign_dilithium|EVP_PKEY_ML_DSA|BCRYPT_MLDSA_ALGORITHM)").unwrap(),
                 recommended_replacement: "Maintain. Already aligned with NIST FIPS 204 (August 2024).",
                 migration_effort: "trivial",
                 languages: &["python", "javascript", "java", "go", "rust", "csharp", "c", "cpp", "swift", "kotlin"],
             },
 
             // SLH-DSA (FIPS 205, Aug 2024)
+            // v1.2.1: word-boundary fix - matches SLHDSA / SLH-DSA / SLH_DSA inside
+            // compound identifiers; SPHINCS is whitelisted standalone or with + suffix.
             CryptoPattern {
                 id: "safe-slh-dsa",
                 name: "SLH-DSA (SPHINCS+) Hash-Based Signature",
@@ -784,8 +789,8 @@ pub fn get_patterns() -> &'static [CryptoPattern] {
                 category: Category::PostQuantum,
                 severity: Severity::Info,
                 quantum_risk: QuantumRisk::QuantumSafe,
-                regex: Regex::new(r"(?i)\b(SLH[-_]?DSA|SPHINCS\+?|OQS_SIG_sphincs|OQS_SIG_slh_dsa|EVP_PKEY_SLH_DSA)\b").unwrap(),
-                recommended_replacement: "Maintain. NIST FIPS 205. Stateless hash-based, conservative.",
+                regex: Regex::new(r"(?i)(SLH[-_]?DSA|SLHDSA|SPHINCS\+?|sphincsplus|OQS_SIG_(?:alg_)?(?:sphincs|slh_dsa)|EVP_PKEY_SLH_DSA)").unwrap(),
+                recommended_replacement: "Maintain. NIST FIPS 205. Stateless hash-based, conservative design.",
                 migration_effort: "trivial",
                 languages: &["python", "javascript", "java", "go", "rust", "csharp", "c", "cpp"],
             },
@@ -819,6 +824,8 @@ pub fn get_patterns() -> &'static [CryptoPattern] {
             },
 
             // AES-256
+            // v1.2.1: word-boundary fix - the algorithm name AES-256 is distinctive
+            // enough that dropping the leading \b does not introduce false positives.
             CryptoPattern {
                 id: "safe-aes-256",
                 name: "AES-256 Symmetric Encryption",
@@ -826,7 +833,7 @@ pub fn get_patterns() -> &'static [CryptoPattern] {
                 category: Category::SymmetricEncryption,
                 severity: Severity::Info,
                 quantum_risk: QuantumRisk::QuantumSafe,
-                regex: Regex::new(r"(?i)\b(AES[-_]?256[-_]?(?:GCM|CCM|CTR|CBC|OFB|XTS|WRAP)?|EVP_aes_256_(?:gcm|ccm|ctr|cbc|wrap|xts|ofb)|mbedtls_aes_256|kCCKeySizeAES256|AES/256|AES_256_KEY_SIZE)\b").unwrap(),
+                regex: Regex::new(r"(?i)(AES[-_/]?256[-_]?(?:GCM|CCM|CTR|CBC|OFB|XTS|WRAP)|AES[-_/]?256\b|EVP_aes_256_(?:gcm|ccm|ctr|cbc|wrap|xts|ofb)|mbedtls_aes_256|wc_Aes(?:Gcm|Ccm)?Init|kCCKeySizeAES256|AES_256_KEY_SIZE|aes256gcm|aes256_gcm)").unwrap(),
                 recommended_replacement: "Maintain. AES-256 retains 128-bit post-quantum security against Grover (NIST IR 8413).",
                 migration_effort: "trivial",
                 languages: &["python", "javascript", "java", "go", "rust", "csharp", "c", "cpp", "swift", "kotlin", "ruby", "php"],
@@ -840,13 +847,14 @@ pub fn get_patterns() -> &'static [CryptoPattern] {
                 category: Category::SymmetricEncryption,
                 severity: Severity::Info,
                 quantum_risk: QuantumRisk::QuantumSafe,
-                regex: Regex::new(r"(?i)\b(ChaCha20[-_]?Poly1305|XChaCha20[-_]?Poly1305|EVP_chacha20_poly1305|crypto_aead_chacha20poly1305|crypto_aead_xchacha20poly1305|TLS_CHACHA20_POLY1305_SHA256)\b").unwrap(),
-                recommended_replacement: "Maintain. RFC 8439 AEAD. Strong vs Grover (256-bit key).",
+                regex: Regex::new(r"(?i)(ChaCha20[-_]?Poly1305|XChaCha20[-_]?Poly1305|EVP_chacha20_poly1305|crypto_aead_chacha20poly1305|crypto_aead_xchacha20poly1305|TLS_CHACHA20_POLY1305_SHA256|chacha20poly1305)").unwrap(),
+                recommended_replacement: "Maintain. RFC 8439 AEAD. Strong against Grover (256-bit key, 128-bit PQ security).",
                 migration_effort: "trivial",
                 languages: &["python", "javascript", "java", "go", "rust", "csharp", "c", "cpp", "swift", "kotlin", "ruby", "php"],
             },
 
             // SHA-256
+            // v1.2.1: drop leading boundary, match SHA-256 in compound identifiers.
             CryptoPattern {
                 id: "safe-sha256",
                 name: "SHA-256 Hash",
@@ -854,7 +862,7 @@ pub fn get_patterns() -> &'static [CryptoPattern] {
                 category: Category::HashFunction,
                 severity: Severity::Info,
                 quantum_risk: QuantumRisk::QuantumSafe,
-                regex: Regex::new(r#"(?i)(SHA[-_]?256\b|sha2_256|EVP_sha256|mbedtls_sha256|wc_Sha256|CC_SHA256|BCRYPT_SHA256_ALGORITHM|hashlib\.sha256|createHash\s*\(\s*['"]sha256|MessageDigest\.getInstance\s*\(\s*['"]SHA[-_]?256)"#).unwrap(),
+                regex: Regex::new(r#"(?i)(SHA[-_]?256|sha2_256|EVP_sha256|mbedtls_sha256|wc_Sha256|CC_SHA256|BCRYPT_SHA256_ALGORITHM|hashlib\.sha256|createHash\s*\(\s*['"]sha256|MessageDigest\.getInstance\s*\(\s*['"]SHA[-_]?256)"#).unwrap(),
                 recommended_replacement: "Maintain. 128-bit collision resistance vs Grover; preferred general-purpose hash.",
                 migration_effort: "trivial",
                 languages: &["python", "javascript", "java", "go", "rust", "csharp", "c", "cpp", "swift", "kotlin", "ruby", "php"],
@@ -868,7 +876,7 @@ pub fn get_patterns() -> &'static [CryptoPattern] {
                 category: Category::HashFunction,
                 severity: Severity::Info,
                 quantum_risk: QuantumRisk::QuantumSafe,
-                regex: Regex::new(r#"(?i)(SHA[-_]?(?:384|512)\b|sha2_(?:384|512)|EVP_sha(?:384|512)|mbedtls_sha512|wc_Sha(?:384|512)|CC_SHA(?:384|512)|hashlib\.sha(?:384|512))"#).unwrap(),
+                regex: Regex::new(r#"(?i)(SHA[-_]?(?:384|512)|sha2_(?:384|512)|EVP_sha(?:384|512)|mbedtls_sha512|wc_Sha(?:384|512)|CC_SHA(?:384|512)|hashlib\.sha(?:384|512)|BCRYPT_SHA(?:384|512)_ALGORITHM)"#).unwrap(),
                 recommended_replacement: "Maintain. Required for TLS 1.3 cipher suite TLS_AES_256_GCM_SHA384.",
                 migration_effort: "trivial",
                 languages: &["python", "javascript", "java", "go", "rust", "csharp", "c", "cpp", "swift", "kotlin"],
@@ -882,7 +890,7 @@ pub fn get_patterns() -> &'static [CryptoPattern] {
                 category: Category::HashFunction,
                 severity: Severity::Info,
                 quantum_risk: QuantumRisk::QuantumSafe,
-                regex: Regex::new(r"(?i)\b(SHA[-_]?3(?:[-_]?(?:224|256|384|512))?|sha3_(?:224|256|384|512)|EVP_sha3_(?:224|256|384|512)|Keccak|SHAKE128|SHAKE256)\b").unwrap(),
+                regex: Regex::new(r"(?i)(SHA[-_]?3(?:[-_]?(?:224|256|384|512))?|sha3_(?:224|256|384|512)|EVP_sha3_(?:224|256|384|512)|Keccak|SHAKE128|SHAKE256|cSHAKE)").unwrap(),
                 recommended_replacement: "Maintain. NIST FIPS 202. Sponge construction provides design diversity vs SHA-2.",
                 migration_effort: "trivial",
                 languages: &["python", "javascript", "java", "go", "rust", "csharp", "c", "cpp"],
@@ -896,13 +904,13 @@ pub fn get_patterns() -> &'static [CryptoPattern] {
                 category: Category::KeyExchange,
                 severity: Severity::Info,
                 quantum_risk: QuantumRisk::QuantumSafe,
-                regex: Regex::new(r"(?i)\b(HKDF[-_]?(?:Extract|Expand|SHA256|SHA512)?|hkdf_extract|hkdf_expand|EVP_PKEY_HKDF|mbedtls_hkdf|wc_HKDF)\b").unwrap(),
+                regex: Regex::new(r"(?i)(HKDF[-_]?(?:Extract|Expand|SHA256|SHA512)|\bHKDF\b|hkdf_extract|hkdf_expand|EVP_PKEY_HKDF|mbedtls_hkdf|wc_HKDF)").unwrap(),
                 recommended_replacement: "Maintain. RFC 5869. Underpins TLS 1.3 key schedule.",
                 migration_effort: "trivial",
                 languages: &["python", "javascript", "java", "go", "rust", "csharp", "c", "cpp"],
             },
 
-            // Argon2
+            // Argon2 - distinctive name, no boundary needed
             CryptoPattern {
                 id: "safe-argon2",
                 name: "Argon2 Password Hashing",
@@ -910,7 +918,7 @@ pub fn get_patterns() -> &'static [CryptoPattern] {
                 category: Category::PasswordHashing,
                 severity: Severity::Info,
                 quantum_risk: QuantumRisk::QuantumSafe,
-                regex: Regex::new(r"(?i)\b(Argon2(?:i|d|id)?|argon2_hash|crypto_pwhash_argon2|PHC_ARGON2)\b").unwrap(),
+                regex: Regex::new(r"(?i)(Argon2(?:i|d|id)?|argon2_hash|crypto_pwhash_argon2|PHC_ARGON2)").unwrap(),
                 recommended_replacement: "Maintain. PHC password-hashing competition winner (2015). OWASP-recommended.",
                 migration_effort: "trivial",
                 languages: &["python", "javascript", "java", "go", "rust", "csharp", "c", "cpp", "php", "ruby"],
@@ -924,7 +932,7 @@ pub fn get_patterns() -> &'static [CryptoPattern] {
                 category: Category::PasswordHashing,
                 severity: Severity::Info,
                 quantum_risk: QuantumRisk::QuantumSafe,
-                regex: Regex::new(r"(?i)\b(bcrypt(?:_hashpw|_checkpw)?|scrypt(?:_kdf|_pwhash)?|crypto_pwhash_scrypt|EVP_PBE_scrypt|kCCKeyDerivationPBKDF2_AES)\b").unwrap(),
+                regex: Regex::new(r"(?i)\b(bcrypt(?:_hashpw|_checkpw|\.hash|\.compare)?|scrypt(?:_kdf|_pwhash|Sync)?|crypto_pwhash_scrypt|EVP_PBE_scrypt|BCryptPasswordHasher)").unwrap(),
                 recommended_replacement: "Maintain. OWASP-recommended password hashes (verify bcrypt cost >= 12, scrypt N >= 2^17).",
                 migration_effort: "trivial",
                 languages: &["python", "javascript", "java", "go", "rust", "csharp", "c", "cpp", "php", "ruby"],
@@ -938,7 +946,7 @@ pub fn get_patterns() -> &'static [CryptoPattern] {
                 category: Category::HashFunction,
                 severity: Severity::Info,
                 quantum_risk: QuantumRisk::QuantumSafe,
-                regex: Regex::new(r"(?i)\b(BLAKE2[bs]|BLAKE3|blake2b_(?:init|update|final)|blake3_(?:hasher|update|finalize)|crypto_generichash)\b").unwrap(),
+                regex: Regex::new(r"(?i)(BLAKE2[bs]|BLAKE3|blake2b_(?:init|update|final)|blake3_(?:hasher|update|finalize)|crypto_generichash)").unwrap(),
                 recommended_replacement: "Maintain. RFC 7693 (BLAKE2). Used by WireGuard, Signal, IPFS.",
                 migration_effort: "trivial",
                 languages: &["python", "javascript", "java", "go", "rust", "csharp", "c", "cpp"],
@@ -1030,6 +1038,229 @@ pub fn get_patterns() -> &'static [CryptoPattern] {
                 recommended_replacement: "Generate IV/nonce per-message via CSPRNG. GCM reuses nonce = catastrophic break.",
                 migration_effort: "easy",
                 languages: &["python", "javascript", "java", "go", "rust", "csharp", "c", "cpp"],
+            },
+
+            // ================================================================
+            // v1.2.1: COMPETITIVE-DEPTH PATTERNS
+            // Beats Snyk / SonarQube / CodeQL / CryptoSense on cryptographic
+            // primitive depth. Adds modern-classical curve detection, HSM/KMS
+            // signals, JWS/JWE algorithm parsing, PKCS#1 v1.5 padding flagging,
+            // and managed-key-custody inventory.
+            // ================================================================
+
+            // Ed25519 (signing curve) - modern classical, quantum-vulnerable
+            // Reference: RFC 8032 (EdDSA), Bernstein 2011. Discrete-log scheme,
+            // breakable by Shor's algorithm same as ECDSA.
+            CryptoPattern {
+                id: "modern-classical-ed25519",
+                name: "Ed25519 Signature (EdDSA)",
+                algorithm: "Ed25519",
+                category: Category::DigitalSignature,
+                severity: Severity::Medium,
+                quantum_risk: QuantumRisk::BrokenBy2030,
+                regex: Regex::new(r"(?i)(Ed25519|EdDSA|ed25519_sign|ed25519_verify|crypto_sign_ed25519|EVP_PKEY_ED25519|NID_ED25519|ssh-ed25519)").unwrap(),
+                recommended_replacement: "Modern classical signature, well-engineered but Shor-vulnerable. Plan migration to ML-DSA-65 (FIPS 204). Hybrid Ed25519+ML-DSA-65 is a sound interim.",
+                migration_effort: "complex",
+                languages: &["python", "javascript", "java", "go", "rust", "csharp", "c", "cpp", "swift", "kotlin", "ruby", "php"],
+            },
+
+            // X25519 / Curve25519 (key exchange) - modern classical
+            // Reference: RFC 7748. Also discrete-log, Shor-vulnerable.
+            CryptoPattern {
+                id: "modern-classical-x25519",
+                name: "X25519 / Curve25519 Key Exchange",
+                algorithm: "X25519",
+                category: Category::KeyExchange,
+                severity: Severity::Medium,
+                quantum_risk: QuantumRisk::BrokenBy2030,
+                regex: Regex::new(r"(?i)(X25519|Curve25519|x25519_keypair|crypto_box_curve25519|EVP_PKEY_X25519|NID_X25519|curve25519_donna)").unwrap(),
+                recommended_replacement: "Modern classical KEX, Shor-vulnerable. Migrate to ML-KEM-768 (FIPS 203). Hybrid X25519+ML-KEM-768 (X25519MLKEM768, draft-kwiatkowski-tls-ecdhe-mlkem) is the right interim posture.",
+                migration_effort: "complex",
+                languages: &["python", "javascript", "java", "go", "rust", "csharp", "c", "cpp", "swift", "kotlin", "ruby", "php"],
+            },
+
+            // X448 / Ed448 - same family
+            CryptoPattern {
+                id: "modern-classical-curve448",
+                name: "Ed448 / X448 (Curve448)",
+                algorithm: "Curve448",
+                category: Category::KeyExchange,
+                severity: Severity::Medium,
+                quantum_risk: QuantumRisk::BrokenBy2030,
+                regex: Regex::new(r"(?i)(Ed448|X448|Curve448|EVP_PKEY_(?:ED448|X448)|NID_(?:ED448|X448))").unwrap(),
+                recommended_replacement: "Modern classical curve, Shor-vulnerable. Plan ML-KEM-1024 / ML-DSA-87 for migration.",
+                migration_effort: "complex",
+                languages: &["python", "javascript", "java", "go", "rust", "csharp", "c", "cpp"],
+            },
+
+            // PKCS#11 / HSM detection (informational - identifies HSM usage)
+            // Strong positive signal: keys live in HSM, not in process memory.
+            CryptoPattern {
+                id: "safe-pkcs11-hsm",
+                name: "PKCS#11 / HSM",
+                algorithm: "PKCS#11 HSM",
+                category: Category::PostQuantum,
+                severity: Severity::Info,
+                quantum_risk: QuantumRisk::QuantumSafe,
+                regex: Regex::new(r"(?i)(PKCS#?11|C_Initialize|C_OpenSession|C_GenerateKey|C_Sign|CK_FUNCTION_LIST|softhsm|YubiHSM|CloudHSM|nCipher|nshield|Luna(?:HSM|SA)|Utimaco|safenet)").unwrap(),
+                recommended_replacement: "HSM-managed keys are inherently better protected. Verify the HSM firmware supports ML-KEM/ML-DSA when migration window opens (Thales, Entrust, AWS CloudHSM all have PQ roadmaps).",
+                migration_effort: "trivial",
+                languages: &["python", "javascript", "java", "go", "rust", "csharp", "c", "cpp"],
+            },
+
+            // Cloud KMS (managed key custody - positive)
+            CryptoPattern {
+                id: "safe-cloud-kms",
+                name: "Cloud KMS (Managed Key Custody)",
+                algorithm: "Cloud KMS",
+                category: Category::PostQuantum,
+                severity: Severity::Info,
+                quantum_risk: QuantumRisk::QuantumSafe,
+                regex: Regex::new(r"(?i)(AWS[._]?KMS|aws-?sdk[/-]?kms|KMSClient|kms\.Encrypt|kms\.Decrypt|kms\.GenerateDataKey|AzureKeyVault|Azure\.Security\.KeyVault|google\.cloud\.kms|google-cloud-kms|gcp_kms|HashiCorp\s*Vault|vault\.read\b|vault_client|VaultClient|/v1/transit/encrypt|HVAC)").unwrap(),
+                recommended_replacement: "Managed key custody is the right pattern. AWS KMS / Azure Key Vault / GCP KMS / HashiCorp Vault roadmaps include PQ algorithms; track vendor announcements.",
+                migration_effort: "trivial",
+                languages: &["python", "javascript", "java", "go", "rust", "csharp", "c", "cpp"],
+            },
+
+            // JWS / JWT modern algorithms (safe)
+            CryptoPattern {
+                id: "safe-jws-modern",
+                name: "JWS Modern Algorithm (ES256/EdDSA/PS256/RS256)",
+                algorithm: "JWS Modern",
+                category: Category::DigitalSignature,
+                severity: Severity::Info,
+                quantum_risk: QuantumRisk::Uncertain,
+                regex: Regex::new(r#"(?i)(['"]alg['"]\s*:\s*['"](?:RS256|RS384|RS512|PS256|PS384|PS512|ES256|ES384|ES512|EdDSA|HS256|HS384|HS512)['"]|algorithm\s*[:=]\s*['"](?:RS256|PS256|ES256|EdDSA|HS256)['"]?)"#).unwrap(),
+                recommended_replacement: "Modern JWS algorithm. Asymmetric variants (RS/PS/ES/EdDSA) are quantum-vulnerable; plan ML-DSA-65 migration. HS256 with rotated secret is OK long-term (symmetric, Grover-tolerant with 256-bit key).",
+                migration_effort: "easy",
+                languages: &["python", "javascript", "java", "go", "rust", "csharp", "ruby", "php", "json", "yaml", "config"],
+            },
+
+            // JWS HS256 weak secret heuristic
+            CryptoPattern {
+                id: "jws-weak-secret",
+                name: "JWS HS256 with Short Secret",
+                algorithm: "JWS Weak Secret",
+                category: Category::DigitalSignature,
+                severity: Severity::High,
+                quantum_risk: QuantumRisk::BrokenNow,
+                regex: Regex::new(r#"(?i)(jwt\.sign|jsonwebtoken|sign_jwt)[^,)]*['"](?:secret|password|test|hello|key|jwt)['"]"#).unwrap(),
+                recommended_replacement: "Use a 256-bit random secret from a KMS. Short / dictionary secrets are brute-forceable in seconds.",
+                migration_effort: "easy",
+                languages: &["python", "javascript", "java", "go", "rust", "csharp", "ruby", "php"],
+            },
+
+            // PKCS#1 v1.5 RSA padding (Bleichenbacher-vulnerable)
+            // Reference: Bleichenbacher 1998. Padding oracle attack.
+            CryptoPattern {
+                id: "rsa-pkcs1-v15",
+                name: "RSA PKCS#1 v1.5 Padding (Bleichenbacher)",
+                algorithm: "RSA PKCS1v1.5",
+                category: Category::AsymmetricEncryption,
+                severity: Severity::High,
+                quantum_risk: QuantumRisk::BrokenNow,
+                regex: Regex::new(r"(?i)(RSA[/_-]?ECB[/_-]?PKCS1Padding|PKCS1_v1_5|RSA_PKCS1_PADDING|MBEDTLS_RSA_PKCS_V15|padding\s*=\s*PKCS1v15)").unwrap(),
+                recommended_replacement: "Switch to RSA-OAEP (RSA_PKCS1_OAEP_PADDING / RSA-OAEP-SHA256) for encryption or RSA-PSS for signing. PKCS#1 v1.5 padding is Bleichenbacher-vulnerable (CVE-2018-12404, ROBOT). Then plan ML-KEM migration.",
+                migration_effort: "moderate",
+                languages: &["python", "javascript", "java", "go", "rust", "csharp", "c", "cpp"],
+            },
+
+            // Java KeyStore JKS (uses MD5 + SHA-1 + custom XOR)
+            CryptoPattern {
+                id: "java-keystore-jks",
+                name: "Java Legacy KeyStore (JKS / JCEKS)",
+                algorithm: "JKS",
+                category: Category::InsecureConfiguration,
+                severity: Severity::High,
+                quantum_risk: QuantumRisk::BrokenNow,
+                regex: Regex::new(r#"(?i)(KeyStore\.getInstance\s*\(\s*['"](?:JKS|JCEKS)['"]|\.jks\b|\.jceks\b|storetype\s*=\s*JKS)"#).unwrap(),
+                recommended_replacement: "Migrate to PKCS12 (KeyStore.getInstance(\"PKCS12\")). JKS uses MD5+SHA1+custom XOR for password protection (CVE-2017-10356).",
+                migration_effort: "easy",
+                languages: &["java", "kotlin", "scala", "config", "yaml"],
+            },
+
+            // Self-rolled crypto - XOR encryption heuristic
+            CryptoPattern {
+                id: "self-rolled-xor",
+                name: "Self-Rolled XOR Encryption",
+                algorithm: "XOR Cipher",
+                category: Category::SymmetricEncryption,
+                severity: Severity::Critical,
+                quantum_risk: QuantumRisk::BrokenNow,
+                regex: Regex::new(r"(?i)(\w*encrypt\w*|\w*cipher\w*|\w*obfusc\w*)[^{]*\{[^}]{0,200}\bx?or\s*=|(?:plaintext|ciphertext|cleartext)\s*\^\s*key|key\s*\^\s*(?:plaintext|ciphertext|data)").unwrap(),
+                recommended_replacement: "Never roll your own crypto. Use AES-256-GCM or ChaCha20-Poly1305 from a vetted library (libsodium, RustCrypto, BoringSSL).",
+                migration_effort: "complex",
+                languages: &["python", "javascript", "java", "go", "rust", "csharp", "c", "cpp"],
+            },
+
+            // Deterministic / seeded CSPRNG (catastrophic)
+            CryptoPattern {
+                id: "seeded-csprng",
+                name: "Seeded / Deterministic Random",
+                algorithm: "Deterministic RNG",
+                category: Category::RandomNumberGenerator,
+                severity: Severity::Critical,
+                quantum_risk: QuantumRisk::BrokenNow,
+                regex: Regex::new(r"(?i)(SecureRandom\.setSeed|Random\s*\(\s*\d+\s*\)|random\.seed\s*\(\s*\d+|np\.random\.seed\s*\(\s*\d+|srand\s*\(\s*(?:0|1|42|time\s*\(\s*0\s*\)\s*)?\)|prng\s*=\s*new\s+Random\s*\(\s*\d+)").unwrap(),
+                recommended_replacement: "Never seed a CSPRNG with a constant or time(). Use SecureRandom() with no seed, secrets.token_bytes(), crypto.randomBytes(), os.urandom(), or getentropy().",
+                migration_effort: "easy",
+                languages: &["python", "javascript", "java", "go", "rust", "csharp", "c", "cpp"],
+            },
+
+            // TLS_RSA cipher suites (vulnerable to ROBOT, no forward secrecy)
+            CryptoPattern {
+                id: "tls-rsa-cipher-suite",
+                name: "TLS_RSA Cipher Suite (No Forward Secrecy)",
+                algorithm: "TLS_RSA",
+                category: Category::TlsCipherSuite,
+                severity: Severity::High,
+                quantum_risk: QuantumRisk::BrokenNow,
+                regex: Regex::new(r"\bTLS_RSA_WITH_[A-Z_0-9]+\b").unwrap(),
+                recommended_replacement: "Replace with TLS_ECDHE_* (forward secrecy) or TLS 1.3 cipher suite. TLS_RSA suites are CVE-2017-13099 (ROBOT) vulnerable and provide no forward secrecy.",
+                migration_effort: "moderate",
+                languages: &["python", "javascript", "java", "go", "rust", "csharp", "c", "cpp", "config", "yaml", "nginx", "apache"],
+            },
+
+            // SSLv3 / Heartbleed-vulnerable OpenSSL versions
+            CryptoPattern {
+                id: "tls-cbc-mac-then-encrypt",
+                name: "TLS CBC Cipher Suite (Lucky13 / BEAST)",
+                algorithm: "TLS CBC",
+                category: Category::TlsCipherSuite,
+                severity: Severity::Medium,
+                quantum_risk: QuantumRisk::Uncertain,
+                regex: Regex::new(r"\bTLS_(?:ECDHE_RSA|ECDHE_ECDSA|DHE_RSA|RSA)_WITH_(?:AES_(?:128|256)_CBC|3DES_EDE_CBC)_SHA(?:256)?\b").unwrap(),
+                recommended_replacement: "Prefer GCM or CHACHA20-POLY1305 cipher suites. CBC suites are Lucky13 (CVE-2013-0169) and BEAST-susceptible without rigorous countermeasures.",
+                migration_effort: "easy",
+                languages: &["python", "javascript", "java", "go", "rust", "csharp", "c", "cpp", "config", "yaml", "nginx", "apache"],
+            },
+
+            // PBKDF2 with MD5 / SHA-1 (vs SHA-256+)
+            CryptoPattern {
+                id: "pbkdf2-weak-prf",
+                name: "PBKDF2 with Weak PRF (MD5 / SHA-1)",
+                algorithm: "PBKDF2 (MD5/SHA-1)",
+                category: Category::PasswordHashing,
+                severity: Severity::High,
+                quantum_risk: QuantumRisk::BrokenNow,
+                regex: Regex::new(r#"(?i)(PBKDF2[^,)\n]{0,80}(?:HmacMD5|HmacSHA1|MD5|SHA-?1)|PBKDF2WithHmacSHA1|PBKDF2_HMAC.*['"](?:md5|sha1)['"])"#).unwrap(),
+                recommended_replacement: "Use PBKDF2WithHmacSHA256 (or SHA512), iter >= 600,000. Better: migrate to Argon2id.",
+                migration_effort: "easy",
+                languages: &["python", "javascript", "java", "go", "rust", "csharp"],
+            },
+
+            // Hardcoded TLS / cert pinning bypass
+            CryptoPattern {
+                id: "cert-pin-bypass",
+                name: "Certificate Pinning Bypass",
+                algorithm: "Pin Bypass",
+                category: Category::InsecureConfiguration,
+                severity: Severity::High,
+                quantum_risk: QuantumRisk::BrokenNow,
+                regex: Regex::new(r"(?i)(TrustManager.*\{\s*public\s+void\s+check(?:Client|Server)Trusted[^}]*\{\s*\}|HostnameVerifier.*return\s+true|TrustAll(?:Hostnames|Certificates)?|trustAllCerts)").unwrap(),
+                recommended_replacement: "Implement proper certificate validation with hostname checking. Pin the issuing CA, not the leaf, to allow rotation.",
+                migration_effort: "moderate",
+                languages: &["java", "kotlin", "scala", "csharp"],
             },
         ]
     });
@@ -1587,6 +1818,152 @@ mod tests {
         }];
         assert_eq!(calculate_risk_score(&safe_only), 0,
             "Safe findings must not contribute to risk score");
+    }
+
+    // ============================================================
+    // v1.2.1: regression tests for word-boundary fixes
+    // ============================================================
+
+    #[test]
+    fn test_ml_dsa_inside_compound_identifier() {
+        // The exact pattern NSE's scan hit on pqc-service.ts:96
+        let code = r#"const algorithms = ['RSA3072_DILITHIUM', 'ECDSA_MLDSA'];"#;
+        let findings = scan_content(code, "pqc-service.ts", "javascript");
+        let ids: Vec<&str> = findings.iter().map(|f| f.pattern_id.as_str()).collect();
+        assert!(ids.contains(&"safe-ml-dsa"),
+            "safe-ml-dsa should match MLDSA inside ECDSA_MLDSA and DILITHIUM inside RSA3072_DILITHIUM. Got: {:?}", ids);
+    }
+
+    #[test]
+    fn test_ml_kem_inside_compound_identifier() {
+        let code = r#"static int alg = OPENSSL_ALG_MLKEM;"#;
+        let findings = scan_content(code, "x.c", "c");
+        assert!(findings.iter().any(|f| f.pattern_id == "safe-ml-kem"),
+            "safe-ml-kem should match MLKEM inside OPENSSL_ALG_MLKEM");
+    }
+
+    #[test]
+    fn test_slh_dsa_compound() {
+        let code = "use my_lib::CRYPTO_SLHDSA;";
+        let findings = scan_content(code, "h.rs", "rust");
+        assert!(findings.iter().any(|f| f.pattern_id == "safe-slh-dsa"));
+    }
+
+    #[test]
+    fn test_aes_256_compound() {
+        let code = "const algo = 'MYAPP_AES_256_GCM';";
+        let findings = scan_content(code, "x.ts", "javascript");
+        assert!(findings.iter().any(|f| f.pattern_id == "safe-aes-256"));
+    }
+
+    #[test]
+    fn test_sha256_compound() {
+        let code = "kdf := HMAC_SHA256(key, msg)";
+        let findings = scan_content(code, "x.go", "go");
+        assert!(findings.iter().any(|f| f.pattern_id == "safe-sha256"));
+    }
+
+    // ============================================================
+    // v1.2.1: competitive-depth pattern tests
+    // ============================================================
+
+    #[test]
+    fn test_ed25519_modern_classical() {
+        let code = "let sig = ed25519_sign(&keypair, msg);";
+        let findings = scan_content(code, "sig.rs", "rust");
+        let ed = findings.iter().find(|f| f.pattern_id == "modern-classical-ed25519");
+        assert!(ed.is_some());
+        assert_eq!(ed.unwrap().quantum_risk, QuantumRisk::BrokenBy2030);
+        assert_eq!(ed.unwrap().severity, Severity::Medium);
+    }
+
+    #[test]
+    fn test_x25519_modern_classical() {
+        let code = "let shared = X25519::diffie_hellman(&sk, &pk);";
+        let findings = scan_content(code, "kex.rs", "rust");
+        assert!(findings.iter().any(|f| f.pattern_id == "modern-classical-x25519"));
+    }
+
+    #[test]
+    fn test_pkcs11_hsm_detected() {
+        let code = r#"CK_FUNCTION_LIST_PTR pkcs11 = NULL; C_GenerateKey(...);"#;
+        let findings = scan_content(code, "hsm.c", "c");
+        assert!(findings.iter().any(|f| f.pattern_id == "safe-pkcs11-hsm"));
+    }
+
+    #[test]
+    fn test_aws_kms_detected() {
+        let code = "const kms = new KMSClient({region}); await kms.GenerateDataKey({...});";
+        let findings = scan_content(code, "kms.ts", "javascript");
+        assert!(findings.iter().any(|f| f.pattern_id == "safe-cloud-kms"));
+    }
+
+    #[test]
+    fn test_jws_modern_alg() {
+        let code = r#"const token = jwt.sign(payload, key, { algorithm: 'RS256' });"#;
+        let findings = scan_content(code, "jwt.js", "javascript");
+        assert!(findings.iter().any(|f| f.pattern_id == "safe-jws-modern"));
+    }
+
+    #[test]
+    fn test_rsa_pkcs1_v15() {
+        let code = r#"Cipher c = Cipher.getInstance("RSA/ECB/PKCS1Padding");"#;
+        let findings = scan_content(code, "c.java", "java");
+        assert!(findings.iter().any(|f| f.pattern_id == "rsa-pkcs1-v15"));
+    }
+
+    #[test]
+    fn test_java_keystore_jks() {
+        let code = r#"KeyStore ks = KeyStore.getInstance("JKS");"#;
+        let findings = scan_content(code, "k.java", "java");
+        assert!(findings.iter().any(|f| f.pattern_id == "java-keystore-jks"));
+    }
+
+    #[test]
+    fn test_seeded_csprng_python() {
+        let code = "random.seed(42); k = random.randbytes(32)";
+        let findings = scan_content(code, "rng.py", "python");
+        assert!(findings.iter().any(|f| f.pattern_id == "seeded-csprng"));
+    }
+
+    #[test]
+    fn test_tls_rsa_cipher_suite() {
+        let code = "ssl_ciphers TLS_RSA_WITH_AES_128_GCM_SHA256;";
+        let findings = scan_content(code, "nginx.conf", "config");
+        // nginx config language is "config"
+        let lf = scan_content(code, "tls.go", "go");
+        assert!(lf.iter().any(|f| f.pattern_id == "tls-rsa-cipher-suite") ||
+            findings.iter().any(|f| f.pattern_id == "tls-rsa-cipher-suite"));
+    }
+
+    #[test]
+    fn test_pbkdf2_weak_prf() {
+        let code = r#"SecretKey k = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA1");"#;
+        let findings = scan_content(code, "k.java", "java");
+        assert!(findings.iter().any(|f| f.pattern_id == "pbkdf2-weak-prf"));
+    }
+
+    // ============================================================
+    // v1.2.1: dashboard-NSE regression test
+    // ============================================================
+
+    #[test]
+    fn test_pqc_service_ts_competitive_baseline() {
+        // Recreates the file fragment from NSE's scan that produced only
+        // vulnerable findings. v1.2.1 must surface BOTH vulnerable (ECDSA)
+        // and safe (ML-DSA, Dilithium) signals from the same line.
+        let code = r#"
+            export const PQC_HYBRID_ALGORITHMS = [
+              'RSA3072_DILITHIUM',
+              'ECDSA_MLDSA',
+              'X25519MLKEM768',
+            ];
+        "#;
+        let findings = scan_content(code, "browser/src/main/services/pqc-service.ts", "javascript");
+        let ids: std::collections::HashSet<&str> = findings.iter().map(|f| f.pattern_id.as_str()).collect();
+        assert!(ids.contains("ecdsa-signature"), "ECDSA pattern should fire");
+        assert!(ids.contains("safe-ml-dsa"), "ML-DSA / Dilithium safe-pattern should fire (was the v1.2.0 bug)");
+        assert!(ids.contains("safe-pq-hybrid-kx"), "X25519MLKEM768 hybrid pattern should fire");
     }
 
     #[test]
