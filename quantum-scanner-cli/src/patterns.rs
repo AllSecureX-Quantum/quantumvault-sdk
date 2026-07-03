@@ -415,7 +415,7 @@ pub fn get_patterns() -> &'static [CryptoPattern] {
                 category: Category::HashFunction,
                 severity: Severity::Critical,
                 quantum_risk: QuantumRisk::BrokenNow,
-                regex: Regex::new(r"\b(MD5_Init|MD5_Update|MD5_Final|EVP_md5|NID_md5|EVP_PKEY_HMAC.*md5)\b").unwrap(),
+                regex: Regex::new(r"\b(MD5_Init|MD5_Update|MD5_Final|EVP_md5|NID_md5|EVP_PKEY_HMAC[A-Za-z0-9_ ,()]{0,40}md5)\b").unwrap(),
                 recommended_replacement: "EVP_sha256 (SHA-256) or EVP_sha3_256 (SHA-3-256). MD5 collision-broken (Wang & Yu, 2004).",
                 migration_effort: "easy",
                 languages: &["c", "cpp"],
@@ -1268,6 +1268,169 @@ pub fn get_patterns() -> &'static [CryptoPattern] {
     &PATTERNS
 }
 
+/// Comment/string syntax for a language: (line comments, block comments,
+/// string literals as (delimiter, escapes_allowed, multiline)).
+type LangSyntax = (
+    &'static [&'static str],
+    &'static [(&'static str, &'static str)],
+    &'static [(&'static str, bool, bool)],
+);
+
+fn syntax_for(language: &str) -> LangSyntax {
+    const CLIKE: LangSyntax = (
+        &["//"],
+        &[("/*", "*/")],
+        &[("\"", true, false), ("'", true, false), ("`", false, true)],
+    );
+    match language {
+        "python" => (
+            &["#"],
+            &[],
+            &[
+                ("\"\"\"", false, true),
+                ("'''", false, true),
+                ("\"", true, false),
+                ("'", true, false),
+            ],
+        ),
+        "ruby" | "shell" | "docker" | "config" | "yaml" => {
+            (&["#"], &[], &[("\"", true, false), ("'", false, false)])
+        }
+        "xml" => (&[], &[("<!--", "-->")], &[("\"", false, false), ("'", false, false)]),
+        // No comments: certificates/keys and strict JSON. Mask nothing so PEM
+        // headers and JSON string values remain fully visible.
+        "cert" | "json" | "unknown" => (&[], &[], &[]),
+        // javascript, java, go, rust, csharp, php, c, cpp and anything else.
+        _ => CLIKE,
+    }
+}
+
+/// Build two masked views of `content`, byte for byte (newlines and offsets
+/// preserved so match offsets map back to the original):
+///
+/// * `code_view` - comments AND all string-literal interiors blanked. Used for
+///   symbol/call patterns (e.g. `MD5_Init`, `EVP_md5`, `hashlib.md5`). A crypto
+///   symbol that appears inside a string, such as a log message
+///   `LOG("Error in MD5_Init")`, can therefore NEVER produce a finding, while a
+///   real call `MD5_Init(&ctx)` in code still matches. This is the exact class
+///   of false positive reported by NSE.
+///
+/// * `arg_view` - comments blanked; a string interior is blanked only if it is a
+///   multi-line string or contains whitespace (i.e. prose); a whitespace-free
+///   token such as `"md5"`, `"AES/CBC/PKCS5Padding"` or `"SHA-256"` is kept.
+///   Used for patterns that read the algorithm out of a string argument, e.g.
+///   `getInstance("MD5")` or `createHash('md5')`. Algorithm identifiers never
+///   contain whitespace, so real arguments are always preserved while free-text
+///   mentions are removed.
+fn mask_views(content: &str, language: &str) -> (String, String) {
+    let (line_cmts, block_cmts, strings) = syntax_for(language);
+    if line_cmts.is_empty() && block_cmts.is_empty() && strings.is_empty() {
+        return (content.to_string(), content.to_string());
+    }
+    let bytes = content.as_bytes();
+    let n = bytes.len();
+    let mut code = bytes.to_vec();
+    let mut arg = bytes.to_vec();
+    let sw = |i: usize, tok: &str| -> bool {
+        let t = tok.as_bytes();
+        i + t.len() <= n && &bytes[i..i + t.len()] == t
+    };
+    let blank = |v: &mut [u8], a: usize, b: usize| {
+        for k in a..b {
+            if v[k] != b'\n' {
+                v[k] = b' ';
+            }
+        }
+    };
+    #[derive(Clone, Copy)]
+    enum St {
+        Code,
+        Block(usize),
+    }
+    let mut state = St::Code;
+    let mut i = 0;
+    while i < n {
+        match state {
+            St::Code => {
+                if line_cmts.iter().any(|t| sw(i, t)) {
+                    let start = i;
+                    while i < n && bytes[i] != b'\n' {
+                        i += 1;
+                    }
+                    blank(&mut code, start, i);
+                    blank(&mut arg, start, i);
+                    continue;
+                }
+                if let Some(idx) = block_cmts.iter().position(|(o, _)| sw(i, o)) {
+                    let o = block_cmts[idx].0;
+                    blank(&mut code, i, i + o.len());
+                    blank(&mut arg, i, i + o.len());
+                    i += o.len();
+                    state = St::Block(idx);
+                    continue;
+                }
+                if let Some(idx) = strings.iter().position(|(d, _, _)| sw(i, d)) {
+                    let (d, esc, ml) = strings[idx];
+                    let start = i + d.len();
+                    let mut j = start;
+                    let mut closed = false;
+                    while j < n {
+                        if esc && bytes[j] == b'\\' {
+                            j += 2;
+                            continue;
+                        }
+                        if !ml && bytes[j] == b'\n' {
+                            break;
+                        }
+                        if sw(j, d) {
+                            closed = true;
+                            break;
+                        }
+                        j += 1;
+                    }
+                    let end = j.min(n);
+                    let has_ws = bytes[start..end].iter().any(|b| *b == b' ' || *b == b'\t');
+                    blank(&mut code, start, end); // code view: always blank string body
+                    if ml || has_ws {
+                        blank(&mut arg, start, end); // arg view: blank prose only
+                    }
+                    i = if closed { j + d.len() } else { end };
+                    continue;
+                }
+                i += 1;
+            }
+            St::Block(idx) => {
+                let c = block_cmts[idx].1;
+                if sw(i, c) {
+                    blank(&mut code, i, i + c.len());
+                    blank(&mut arg, i, i + c.len());
+                    i += c.len();
+                    state = St::Code;
+                } else {
+                    blank(&mut code, i, i + 1);
+                    blank(&mut arg, i, i + 1);
+                    i += 1;
+                }
+            }
+        }
+    }
+    // SAFETY: only ASCII bytes were replaced with ASCII spaces; still valid UTF-8.
+    (
+        String::from_utf8(code).unwrap_or_else(|_| content.to_string()),
+        String::from_utf8(arg).unwrap_or_else(|_| content.to_string()),
+    )
+}
+
+/// C/C++ source-level rules (id prefix "c-") detect bare function symbols such
+/// as MD5_Init / EVP_md5, which must never match inside a string literal (e.g. a
+/// log message `"Error in MD5_Init"`). They use the code view, where every string
+/// interior is blanked. All other rules use the arg view, which preserves
+/// whitespace-free algorithm tokens (including compound identifiers such as
+/// 'ECDSA_MLDSA') so cryptographic inventory stays complete.
+fn uses_code_view(pattern_id: &str) -> bool {
+    pattern_id.starts_with("c-")
+}
+
 /// Scan content for crypto patterns
 pub fn scan_content(content: &str, file_path: &str, language: &str) -> Vec<Finding> {
     let mut findings = Vec::new();
@@ -1276,6 +1439,10 @@ pub fn scan_content(content: &str, file_path: &str, language: &str) -> Vec<Findi
     // Detect crypto library used in this file
     let library = detect_crypto_library(content, language);
 
+    // Comment/string-masked views (offsets map back to `content`). Symbol rules
+    // match on code_view (strings blanked); string-argument rules on arg_view.
+    let (code_view, arg_view) = mask_views(content, language);
+
     for pattern in patterns {
         // Check if pattern applies to this language
         if !pattern.languages.is_empty() && !pattern.languages.iter().any(|l| language.contains(l))
@@ -1283,8 +1450,14 @@ pub fn scan_content(content: &str, file_path: &str, language: &str) -> Vec<Findi
             continue;
         }
 
+        let haystack: &str = if uses_code_view(pattern.id) {
+            &code_view
+        } else {
+            &arg_view
+        };
+
         // Find all matches
-        for mat in pattern.regex.find_iter(content) {
+        for mat in pattern.regex.find_iter(haystack) {
             // Calculate line and column
             let (line, column) = get_line_column(content, mat.start());
 
@@ -1545,6 +1718,156 @@ mod tests {
         assert!(!findings.is_empty());
         assert_eq!(findings[0].algorithm, "MD5");
         assert_eq!(findings[0].severity, Severity::Critical);
+    }
+
+    #[test]
+    fn test_no_false_positive_in_comments_and_strings() {
+        // The NSE class of escalation: crypto terms mentioned only in comments
+        // or free-text strings must NOT produce findings.
+        // NOTE: the CLI intentionally inventories algorithm tokens that appear in
+        // real code and identifiers/config strings (e.g. 'ECDSA_MLDSA'); see
+        // test_pqc_service_ts_competitive_baseline. The false-positive class we
+        // eliminate here is crypto terms that appear ONLY in comments.
+        let cases: &[(&str, &str)] = &[
+            ("// legacy crypto.createHash('md5') was removed", "test.js"),
+            ("# we no longer use hashlib.md5 here", "test.py"),
+            ("/* MD5_Init and RC4 and ECDSA used to live here */", "test.c"),
+            ("// ECDSA and DES support was dropped", "test.js"),
+            ("x = 1  # RSA.generate is not called", "test.py"),
+            ("code(); // TODO migrate blowfish and rc4 later", "test.go"),
+        ];
+        for (code, file) in cases {
+            let lang = detect_language(file);
+            let findings = scan_content(code, file, lang);
+            assert!(
+                findings.is_empty(),
+                "expected no findings for {:?}, got {:?}",
+                code,
+                findings.iter().map(|f| &f.algorithm).collect::<Vec<_>>()
+            );
+        }
+    }
+
+    #[test]
+    fn test_nse_symbol_inside_string_literal_is_not_flagged() {
+        // The exact NSE escalation (ConnMgrFwdFncts.c / AllsecureX_CM_ANET):
+        // the C symbol MD5_Init appears both as a real call and inside a log
+        // string. Only the real calls may be flagged, never the log messages.
+        let code = "\
+if (MD5_Init(&ctx) != 1) {\n\
+    LOG_INFO(APP, FAILURE, \"Error in MD5_Init\");\n\
+    return FAILURE;\n\
+}\n\
+if (MD5_Update(&ctx, buf, len) != 1) {\n\
+    LOG_INFO(APP, FAILURE, \"Error in MD5_Update\");\n\
+}\n\
+if (MD5_Final(out, &ctx) != 1) {\n\
+    LOG_INFO(APP, FAILURE, \"Error in MD5_Final\");\n\
+}\n";
+        let findings = scan_content(code, "ConnMgrFwdFncts.c", "c");
+        let md5_lines: Vec<usize> = findings
+            .iter()
+            .filter(|f| f.algorithm.contains("MD5"))
+            .map(|f| f.line)
+            .collect();
+        // Exactly the three real calls (lines 1, 5, 8); zero from the log strings.
+        assert_eq!(md5_lines, vec![1, 5, 8], "got {:?}", findings.iter().map(|f| (f.line, &f.context)).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn test_nse_connmgr_exact_reproduction() {
+        // Faithful reproduction of ConnMgrFwdFncts.c from NSE's screenshots.
+        // Every "MD5" token is present: the #ifdef macro, three real calls, three
+        // log strings, a variable (DHgLenMD5), a comment (/*Verify MD5*/) and a
+        // macro (INCOMING_PKT_MD5). Only the three REAL CALLS may be findings.
+        let code = r#"
+#ifdef _OPEN_SSL_MD5
+    LOG_FUNC_IN;
+    psIncomingPkt = ( INCOMING_PKT * ) pcaBuf;
+    if( MD5_Init(&ctx) != 1)
+    {
+        LOG_INFO(APP, SUCCESS, "Error in MD5_Init");
+        LOG_FUNC_OUT;
+        return FAILURE;
+    }
+    if( MD5_Update(&ctx, (const VOID *) & ( psIncomingPkt->caBufferFromTap ), DHgLenMD5) != 1)
+    {
+        LOG_INFO(APP, FAILURE, "Error in MD5_Update");
+        return FAILURE;
+    }
+    if( MD5_Final(( UCHAR *)caBuff, &ctx) != 1)
+    {
+        LOG_INFO(APP, FAILURE, "Error in MD5_Final");
+        return FAILURE;
+    }
+    /*Verify MD5*/
+    if( memcmp( caBuff, INCOMING_PKT_MD5(psIncomingPkt), 16 ) != 0 )
+    {
+        return FAILURE;
+    }
+#endif
+"#;
+        let findings = scan_content(code, "ConnMgrFwdFncts.c", "c");
+        let lines: Vec<&str> = code.lines().collect();
+
+        // Print exactly which lines were flagged (visible with --nocapture).
+        eprintln!("--- MD5 findings ---");
+        for f in findings.iter().filter(|f| f.algorithm.contains("MD5")) {
+            eprintln!("  line {}: {}", f.line, lines[f.line - 1].trim());
+        }
+
+        let md5: Vec<&Finding> = findings.iter().filter(|f| f.algorithm.contains("MD5")).collect();
+
+        // Exactly the three real calls, nothing else.
+        assert_eq!(md5.len(), 3, "expected 3 real-call findings, got {}", md5.len());
+        for f in &md5 {
+            let src = lines[f.line - 1];
+            assert!(
+                src.contains("MD5_Init(") || src.contains("MD5_Update(") || src.contains("MD5_Final("),
+                "finding on a non-call line: {:?}",
+                src
+            );
+            assert!(!src.contains("Error in"), "flagged a log string: {:?}", src);
+            assert!(!src.contains("/*"), "flagged a comment: {:?}", src);
+            assert!(!src.contains("INCOMING_PKT_MD5"), "flagged a macro name: {:?}", src);
+            assert!(!src.contains("#ifdef"), "flagged an #ifdef: {:?}", src);
+        }
+    }
+
+    #[test]
+    fn test_bare_md5_name_never_flagged() {
+        // A line whose ONLY crypto content is the bare token "MD5" (identifier,
+        // macro, comment, string, or #define) must never be a finding.
+        let cases: &[(&str, &str)] = &[
+            ("#ifdef _OPEN_SSL_MD5", "f.c"),
+            ("int DHgLenMD5 = 16;", "f.c"),
+            ("x = INCOMING_PKT_MD5(pkt);", "f.c"),
+            ("/* Verify MD5 checksum */", "f.c"),
+            ("const label = \"MD5\";", "f.js"),
+            ("# MD5 is no longer used", "f.py"),
+            ("md5_column = row.md5;", "f.py"),
+            ("String MD5 = getName();", "f.java"),
+        ];
+        for (line, file) in cases {
+            let lang = detect_language(file);
+            let findings = scan_content(line, file, lang);
+            assert!(
+                findings.is_empty(),
+                "expected NO finding for {:?}, got {:?}",
+                line,
+                findings.iter().map(|f| (&f.algorithm, f.line)).collect::<Vec<_>>()
+            );
+        }
+    }
+
+    #[test]
+    fn test_real_call_still_detected_alongside_comment() {
+        // A real call on one line, a comment mention on another: exactly one hit.
+        let code = "h = hashlib.md5(data)\n# md5 is legacy, remove later\n";
+        let findings = scan_content(code, "test.py", "python");
+        let md5: Vec<_> = findings.iter().filter(|f| f.algorithm == "MD5").collect();
+        assert_eq!(md5.len(), 1, "got {:?}", findings);
+        assert_eq!(md5[0].line, 1);
     }
 
     #[test]

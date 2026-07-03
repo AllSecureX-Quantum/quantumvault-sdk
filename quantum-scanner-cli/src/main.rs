@@ -8,6 +8,8 @@
 mod api;
 mod auth;
 mod config;
+#[cfg(test)]
+mod crypto_corpus;
 mod patterns;
 mod scanner;
 mod ui;

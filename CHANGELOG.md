@@ -4,6 +4,27 @@ All notable changes to the AllSecureX Quantum Scanner are documented in this fil
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.2] - 2026-07-03
+
+### Fixed
+- **Zero false positives: context-aware detection.** Detection now runs on a
+  comment- and string-aware view of each file. A cryptographic term that appears
+  only in a comment, a log/error string (e.g. `LOG("Error in MD5_Init")`), or an
+  identifier/macro (e.g. `DHgLenMD5`, `_OPEN_SSL_MD5`) is no longer reported.
+  C/C++ function-symbol rules run on a code-only view (strings blanked); rules
+  that read an algorithm from a string argument (e.g. `getInstance("MD5")`)
+  preserve whitespace-free tokens. Reported on NSE's scan of `ConnMgrFwdFncts.c`.
+
+### Changed
+- Call-site anchoring across rules; corrected verdicts so safe choices are never
+  flagged as weak (RSA-OAEP, AES-CBC advisory-only, `SecureRandom` excluded from
+  weak-PRNG; Ed25519 / X25519 classified quantum-vulnerable, not broken).
+
+### Added
+- Executable 88-case detection corpus and a verbatim NSE-file regression test
+  that gate every build (real usage must detect; comments, log strings,
+  unrelated identifiers and placeholders must stay silent; safe/PQC must not flag).
+
 ## [1.2.1] - 2026-06-19
 
 ### Fixed
